@@ -137,6 +137,29 @@ as $$
   select ((now() at time zone 'UTC') + interval '8 hours')::date;
 $$;
 
+-- 收录规则集中在一处：返回不收的理由，合格返回 null。
+-- 发布时用它拦，后台「清理不合规」也用它判定，两边口径不会跑偏。
+create or replace function public.hub_code_problem(p_code text)
+returns text
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  with c as (select upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g')) as n)
+  select case
+    when n is null or n = ''           then '邀请码是空的'
+    when length(n) <> 6                then '邀请码必须是 6 位，这个是 ' || length(n) || ' 位'
+    when n !~ '[A-Z]' or n !~ '[0-9]'  then '邀请码必须字母和数字都有'
+    when n ~ '[A-Z]{3}'                then '邀请码里有 3 个字母连在一起'
+    when n ~ '[0-9]{3}'                then '邀请码里有 3 个数字连在一起'
+    when n = any (array['OPENAI','CLOUD','GOOGLE','GITHUB','DOUBAO','PYTHON','MOBILE','SERVER','WINDOW','SYSTEM','PUBLIC','MASTER','SECRET'])
+                                       then '这看着是英文单词'
+    when n ~ '(91|78|13|27)'           then '邀请码里带了 91 / 78 / 13 / 27'
+    else null
+  end
+  from c;
+$$;
+
 -- 超时未回填的宽限分钟数（0 = 关闭自动限制）
 create or replace function public.hub_grace_minutes()
 returns integer
@@ -282,7 +305,9 @@ as $$
     'remainingSpots', p_row.remaining_spots,
     'claimedCount',   p_row.claimed_count,
     'queueRank',      p_row.queue_rank,
-    'createdAt',      p_row.created_at
+    'createdAt',      p_row.created_at,
+    -- 后台用：这枚码符不符合现在的收录规则
+    'bad',            public.hub_code_problem(p_row.code) is not null
   );
 $$;
 
@@ -399,6 +424,8 @@ $$;
 
 -- 搜索不会泄露：搜的是 code_norm，但返回的还是遮罩卡；命中即为"有这么个码"。
 
+-- 收录规则集中在一处：返回不收的理由，合格返回 null。
+-- 发布时用它拦，后台「清理不合规」也用它判定，两边口径不会跑偏。
 -- 拒收：写一条 reject_log（只留 7 天），再把「为什么没收」返回给前端
 create or replace function public.hub_reject(
   p_code    text,
@@ -442,6 +469,7 @@ declare
   v_rank    integer;
   v_row     public.invite_codes;
   v_blocked boolean;
+  v_problem text;
   v_hint    text := '';
 begin
   -- 提交失败一律不算回填：如果这台设备正被限制，提示里说清楚"限制还没解除"
@@ -451,28 +479,10 @@ begin
   end if;
 
   -- ---- 格式校验：专收小豆 6 位「字母+数字」码，乱七八糟的一律不收（拒收都进日志）----
-  if length(v_norm) <> 6 then
+  v_problem := public.hub_code_problem(v_norm);
+  if v_problem is not null then
     return public.hub_reject(v_norm, v_visitor,
-      '邀请码必须是 6 位，你填的是 ' || length(v_norm) || ' 位', v_hint);
-  end if;
-  if v_norm !~ '[A-Z]' or v_norm !~ '[0-9]' then
-    return public.hub_reject(v_norm, v_visitor,
-      '邀请码必须字母和数字都有；纯字母、纯数字的码本站不收', v_hint);
-  end if;
-  if v_norm ~ '[A-Z]{3}' then
-    return public.hub_reject(v_norm, v_visitor,
-      '邀请码里不能有 3 个字母连在一起（像乱填的），本站不收', v_hint);
-  end if;
-  if v_norm ~ '[0-9]{3}' then
-    return public.hub_reject(v_norm, v_visitor,
-      '邀请码里不能有 3 个数字连在一起（像乱填的），本站不收', v_hint);
-  end if;
-  if v_norm = any (array['OPENAI','CLOUD','GOOGLE','GITHUB','DOUBAO','PYTHON','MOBILE','SERVER','WINDOW','SYSTEM','PUBLIC','MASTER','SECRET']) then
-    return public.hub_reject(v_norm, v_visitor, '这看着是英文单词，不是邀请码，本站不收', v_hint);
-  end if;
-  if v_norm ~ '(91|78|13|27)' then
-    return public.hub_reject(v_norm, v_visitor,
-      '邀请码里带了不合适的数字（91 / 78 / 13 / 27），本站不收', v_hint);
+      '本站不收这个码：' || v_problem || '。规矩是 6 位、字母数字都有、不能 3 个连在一起、不带 91/78/13/27', v_hint);
   end if;
   if v_spots < 1 or v_spots > 30 then
     return public.hub_reject(v_norm, v_visitor, '剩余次数必须是 1–30 的整数', v_hint);
@@ -929,6 +939,40 @@ begin
 end;
 $$;
 
+-- 清理不合规的码：按 hub_code_problem 统一判定，合格的留着，不合规的一律下架
+-- 用「下架」而不是「删除」：码和领取记录都还在，只是不再能揭晓，误杀还能在码表里恢复
+create or replace function public.admin_purge_bad(p_key text, p_apply boolean default false)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_list    json;
+  v_n       integer;
+  v_removed integer := 0;
+begin
+  perform public.hub_require_admin(p_key);
+
+  select coalesce(json_agg(t.code_norm order by t.created_at), '[]'::json)
+    into v_list
+    from public.invite_codes t
+   where t.status <> 'expired' and public.hub_code_problem(t.code_norm) is not null;
+  v_n := json_array_length(v_list);
+
+  if coalesce(p_apply, false) and v_n > 0 then
+    perform pg_advisory_xact_lock(778899);
+    update public.invite_codes
+       set status = 'expired', updated_at = now()
+     where status <> 'expired' and public.hub_code_problem(code_norm) is not null;
+    get diagnostics v_removed = row_count;
+  end if;
+
+  return json_build_object('ok', true, 'found', v_n, 'codes', v_list, 'removed', v_removed,
+                           'stats', public.hub_stats());
+end;
+$$;
+
 create or replace function public.admin_resolve_report(
   p_id      bigint,
   p_key     text,
@@ -1287,7 +1331,9 @@ revoke all on function public.admin_set_autoblock(text, integer) from public;
 revoke all on function public.admin_set_watermark(text, text, text, numeric) from public;
 revoke all on function public.admin_rejects(text, integer) from public;
 revoke all on function public.admin_clear_rejects(text) from public;
+revoke all on function public.admin_purge_bad(text, boolean) from public;
 revoke all on function public.hub_reject(text, text, text, text) from public;
+revoke all on function public.hub_code_problem(text) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -1311,6 +1357,7 @@ grant execute on function public.admin_set_autoblock(text, integer) to anon, aut
 grant execute on function public.admin_set_watermark(text, text, text, numeric) to anon, authenticated;
 grant execute on function public.admin_rejects(text, integer) to anon, authenticated;
 grant execute on function public.admin_clear_rejects(text) to anon, authenticated;
+grant execute on function public.admin_purge_bad(text, boolean) to anon, authenticated;
 
 
 

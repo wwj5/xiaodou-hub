@@ -126,6 +126,7 @@
       <button class="adm-tab" data-status="closed" type="button">已用完 / 已下架</button>
       <div class="adm-right">
         <button class="adm-mini" id="reloadBtn" type="button">重载</button>
+        <button class="adm-mini danger" id="purgeBtn" type="button">清理不合规的码</button>
         <button class="adm-mini danger" id="clearBtn" type="button">清空全部码</button>
       </div>
     </div>
@@ -340,7 +341,8 @@
       const st = c.status === "available" ? "available" : c.status;
       const label = c.status === "available" ? "可揭晓" : (c.status === "expired" ? "已下架" : "已用完");
       return "<tr>" +
-        "<td><code>" + esc(c.code) + "</code></td>" +
+        "<td><code>" + esc(c.code) + "</code>" +
+          (c.bad ? ' <span class="adm-tag expired">不合规</span>' : "") + "</td>" +
         '<td><span class="adm-tag ' + esc(st) + '">' + label + "</span></td>" +
         "<td>" + c.remainingSpots + " / " + c.totalSpots + "</td>" +
         "<td>" + c.queueRank + "</td>" +
@@ -734,6 +736,31 @@
   });
 
   /* ---------------- 清空全部码 ---------------- */
+  $("#purgeBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await rpc("admin_purge_bad", { p_key: listKey, p_apply: false });
+      if (!res || !res.found) { toast("池子里没有不合规的码，很干净"); return; }
+      const sample = (res.codes || []).slice(0, 10).join("、");
+      askConfirm(
+        "清理 " + res.found + " 个不合规的码",
+        "这些码不符合现在的收录规则（6 位、字母和数字都有、不能 3 个连在一起、不含 91/78/13/27）：" +
+        sample + (res.found > 10 ? " 等" : "") + "。清理会把码、它的揭晓记录、关联举报一起删掉，不能撤销。",
+        "全部清理",
+        async () => {
+          const r2 = await rpc("admin_purge_bad", { p_key: listKey, p_apply: true });
+          toast("已清理 " + (r2 && r2.removed != null ? r2.removed : 0) + " 个不合规的码");
+          await load();
+        }
+      );
+    } catch (err) {
+      toast(err.message || "读取失败");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $("#clearBtn").addEventListener("click", async () => {
     let issued = $("#sIssued").textContent;
     askConfirm(
