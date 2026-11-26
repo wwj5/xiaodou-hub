@@ -161,18 +161,18 @@ declare
   v_hash text;
 begin
   if p_key is null or length(trim(p_key)) = 0 then
-    raise exception '需要管理密钥' using errcode = 'P0001';
+    raise exception '需要管理密码' using errcode = 'P0001';
   end if;
   select admin_token_hash into v_hash from public.app_settings where id = true;
   if v_hash is null or v_hash <> encode(sha256(convert_to(trim(p_key), 'UTF8')), 'hex') then
-    raise exception '管理密钥不对' using errcode = 'P0001';
+    raise exception '管理密码不对' using errcode = 'P0001';
   end if;
 end;
 $$;
 
--- 通用管理密钥由你自己执行一次（把字符串换掉）：
+-- 通用管理密码由你自己执行一次（把字符串换掉）：
 -- insert into public.app_settings (id, admin_token_hash)
--- values (true, encode(sha256(convert_to('你设置的一长串密钥', 'UTF8')), 'hex'))
+-- values (true, encode(sha256(convert_to('你设置的一长串密码', 'UTF8')), 'hex'))
 -- on conflict (id) do update
 --   set admin_token_hash = excluded.admin_token_hash, updated_at = now();
 
@@ -686,6 +686,33 @@ begin
 end;
 $$;
 
+create or replace function public.admin_clear_codes(p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_n integer;
+begin
+  perform public.hub_require_admin(p_key);
+  perform pg_advisory_xact_lock(778899);
+
+  select count(*) into v_n from public.invite_codes;
+
+  delete from public.feedback f
+   where f.code_id is not null
+     and exists (select 1 from public.invite_codes c where c.id = f.code_id);
+
+  delete from public.reports r
+   where exists (select 1 from public.invite_codes c where c.id = r.code_id);
+
+  delete from public.invite_codes where id is not null;
+
+  return json_build_object('ok', true, 'removed', v_n, 'stats', public.hub_stats());
+end;
+$$;
+
 create or replace function public.admin_resolve_report(
   p_id      bigint,
   p_key     text,
@@ -738,6 +765,7 @@ revoke all on function public.admin_update(uuid, text, integer, integer, text) f
 revoke all on function public.admin_reseed(text) from public;
 revoke all on function public.admin_list(text, text, integer) from public;
 revoke all on function public.admin_delete_code(uuid, text) from public;
+revoke all on function public.admin_clear_codes(text) from public;
 revoke all on function public.admin_resolve_report(bigint, text, boolean) from public;
 revoke all on function public.admin_set_key(text, text) from public;
 
@@ -752,5 +780,7 @@ grant execute on function public.admin_update(uuid, text, integer, integer, text
 grant execute on function public.admin_reseed(text) to anon, authenticated;
 grant execute on function public.admin_list(text, text, integer) to anon, authenticated;
 grant execute on function public.admin_delete_code(uuid, text) to anon, authenticated;
+grant execute on function public.admin_clear_codes(text) to anon, authenticated;
 grant execute on function public.admin_resolve_report(bigint, text, boolean) to anon, authenticated;
 grant execute on function public.admin_set_key(text, text) to anon, authenticated;
+

@@ -6,11 +6,12 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=7" />
+<link rel="stylesheet" href="styles.css?v=14" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
   .adm-head h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .adm-head .tools { display: flex; align-items: center; gap: 8px; }
   .adm-back { font-size: 13px; color: var(--muted); text-decoration: none; }
   .adm-back:hover { color: var(--blue); }
   .adm-gate { max-width: 460px; margin: 12vh auto 0; background: #fff; border: 1px solid var(--line);
@@ -31,7 +32,7 @@
   .adm-tab { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
              padding: 6px 12px; border-radius: 999px; font-size: 13px; font-family: inherit; cursor: pointer; }
   .adm-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .adm-bar .adm-refresh { margin-left: auto; }
+  .adm-bar .adm-right { margin-left: auto; display: flex; gap: 8px; }
   .adm-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px;
                overflow: hidden; box-shadow: 0 1px 0 rgba(15, 30, 60, .04); font-size: 13px; }
   .adm-table th, .adm-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
@@ -45,6 +46,7 @@
   .adm-mini { appearance: none; border: 1px solid var(--line); background: #fff; border-radius: 7px;
               padding: 3px 9px; font-size: 12px; font-family: inherit; color: #33415c; cursor: pointer; }
   .adm-mini:hover { border-color: var(--blue); color: var(--blue); }
+  .adm-mini:disabled { opacity: .55; cursor: default; }
   .adm-mini.danger:hover { border-color: #c0392b; color: #c0392b; }
   .adm-sec { margin-top: 26px; }
   .adm-sec h2 { font-size: 15px; margin: 0 0 4px; }
@@ -54,6 +56,20 @@
   .adm-report .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .adm-report .reason { color: #c0392b; font-weight: 600; }
   .adm-report .note { color: var(--muted); margin-top: 6px; line-height: 1.6; }
+  .adm-mask { position: fixed; inset: 0; background: rgba(8, 20, 40, .46); display: flex; align-items: center;
+              justify-content: center; padding: 20px; z-index: 60; }
+  .adm-mask[hidden] { display: none; }
+  .adm-dialog { background: #fff; border-radius: 14px; padding: 20px; width: 100%; max-width: 420px;
+                box-shadow: 0 30px 60px -32px rgba(10, 25, 50, .5); }
+  .adm-dialog h3 { margin: 0 0 8px; font-size: 16px; }
+  .adm-dialog p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 14px; }
+  .adm-dialog input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
+                      font-size: 14px; font-family: inherit; margin-bottom: 8px; }
+  .adm-dialog input:focus { outline: 2px solid rgba(37, 99, 235, .18); border-color: var(--blue); }
+  .adm-dialog .err { color: #c0392b; font-size: 12.5px; margin: 0 0 8px; }
+  .adm-dialog .seg { font-size: 12px; color: #6b7280; margin: -2px 0 10px; }
+  .adm-dialog .foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .adm-dialog .foot .primary-btn { padding: 9px 16px; }
   @media (max-width: 760px) {
     .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
@@ -64,17 +80,17 @@
 <div class="adm-wrap">
   <div class="adm-head">
     <h1>管理后台</h1>
-    <div>
+    <div class="tools">
       <a class="adm-back" href="./">← 返回首页</a>
-      <button class="adm-mini adm-refresh" id="passBtn" type="button" hidden>改密码</button>
-      <button class="adm-mini adm-refresh" id="logoutBtn" type="button" hidden>退出</button>
+      <button class="adm-mini" id="passBtn" type="button" hidden>改密码</button>
+      <button class="adm-mini" id="logoutBtn" type="button" hidden>退出</button>
     </div>
   </div>
 
   <div class="adm-gate" id="gate">
-    <h2>先输入管理密码</h2>
-    <p>密码只存在这台电脑的 sessionStorage 里，关掉浏览器就没了。首页页脚的“管理入口”也是进这里。</p>
-    <input id="keyInput" type="password" placeholder="输入管理员密码" spellcheck="false" autocomplete="off" />
+    <h2>输入管理密码</h2>
+    <p>密码校验在服务端，浏览器里只留一个本次会话的通行凭证，关掉标签页就失效。</p>
+    <input id="keyInput" type="password" placeholder="管理密码" spellcheck="false" autocomplete="off" />
     <button class="primary-btn" id="enterBtn" type="button">进入</button>
     <p class="adm-err" id="gateErr" hidden></p>
   </div>
@@ -91,7 +107,10 @@
       <button class="adm-tab on" data-status="all" type="button">全部</button>
       <button class="adm-tab" data-status="available" type="button">可揭晓</button>
       <button class="adm-tab" data-status="closed" type="button">已用完 / 已下架</button>
-      <button class="adm-mini adm-refresh" id="reloadBtn" type="button">重载</button>
+      <div class="adm-right">
+        <button class="adm-mini" id="reloadBtn" type="button">重载</button>
+        <button class="adm-mini danger" id="clearBtn" type="button">清空全部码</button>
+      </div>
     </div>
 
     <table class="adm-table" id="codeTable">
@@ -109,6 +128,32 @@
       <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
       <div id="reportList"></div>
       <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
+    </div>
+  </div>
+</div>
+
+<div class="adm-mask" id="confirmMask" hidden>
+  <div class="adm-dialog" role="dialog" aria-modal="true">
+    <h3 id="confirmTitle">确认</h3>
+    <p id="confirmDesc"></p>
+    <div class="foot">
+      <button class="adm-mini" id="confirmCancel" type="button">取消</button>
+      <button class="primary-btn" id="confirmOk" type="button">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="adm-mask" id="passMask" hidden>
+  <div class="adm-dialog" role="dialog" aria-modal="true">
+    <h3>改管理密码</h3>
+    <p>改完旧密码立刻失效，只有新密码能进后台。至少 8 位，建议字母加数字。</p>
+    <input id="newPass" type="password" placeholder="新密码（≥8 位）" autocomplete="new-password" />
+    <input id="newPass2" type="password" placeholder="再输一次" autocomplete="new-password" />
+    <div class="seg" id="passSeg"></div>
+    <p class="err" id="passErr" hidden></p>
+    <div class="foot">
+      <button class="adm-mini" id="passCancel" type="button">取消</button>
+      <button class="primary-btn" id="passSave" type="button">保存</button>
     </div>
   </div>
 </div>
@@ -162,6 +207,31 @@
     return (d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
+  /* ---------------- 页面内确认框（不用原生 confirm） ---------------- */
+  let confirmCb = null;
+  function askConfirm(title, desc, okText, cb) {
+    $("#confirmTitle").textContent = title;
+    $("#confirmDesc").textContent = desc;
+    $("#confirmOk").textContent = okText || "确认";
+    confirmCb = cb;
+    $("#confirmMask").hidden = false;
+  }
+  function closeConfirm() {
+    $("#confirmMask").hidden = true;
+    confirmCb = null;
+  }
+  $("#confirmCancel").addEventListener("click", closeConfirm);
+  $("#confirmMask").addEventListener("click", (e) => { if (e.target.id === "confirmMask") closeConfirm(); });
+  $("#confirmOk").addEventListener("click", async () => {
+    const cb = confirmCb;
+    if (!cb) return;
+    const btn = $("#confirmOk");
+    btn.disabled = true;
+    try { await cb(); closeConfirm(); } catch (err) {
+      toast(err.message || "操作失败");
+    } finally { btn.disabled = false; }
+  });
+
   function renderStats(data) {
     $("#sIssued").textContent = data.stats.issued;
     $("#sAvailable").textContent = data.stats.available;
@@ -173,6 +243,7 @@
   function renderCodes() {
     const body = $("#codeBody");
     $("#codeEmpty").hidden = cards.length > 0;
+    $("#codeTable").hidden = cards.length === 0;
     body.innerHTML = cards.map((c) => {
       const st = c.status === "available" ? "available" : c.status;
       const label = c.status === "available" ? "可揭晓" : (c.status === "expired" ? "已下架" : "已用完");
@@ -219,6 +290,7 @@
     renderStats(data);
     renderCodes();
     renderReports(data.reports || []);
+    return data;
   }
 
   function enter(key) {
@@ -231,61 +303,109 @@
     load().catch(onFail);
   }
 
-  function onFail(err) {
-    const box = $("#gateErr");
-    box.textContent = err.message || "加载失败";
-    box.hidden = false;
+  function backToGate(msg) {
+    sessionStorage.removeItem(KEY_STORE);
+    listKey = "";
+    $("#logoutBtn").hidden = true;
+    $("#passBtn").hidden = true;
     $("#panel").hidden = true;
     $("#gate").hidden = false;
-    if (/密钥/.test(box.textContent)) {
-      sessionStorage.removeItem(KEY_STORE);
-      listKey = "";
-      $("#logoutBtn").hidden = true;
-      $("#passBtn").hidden = true;
-    }
+    if (msg) { $("#gateErr").textContent = msg; $("#gateErr").hidden = false; }
+    $("#keyInput").focus();
+  }
+
+  function onFail(err) {
+    const msg = (err && err.message) || "加载失败";
+    // 密码错/过期 → 回登录页并清掉凭证；其它错误只在页面上报
+    if (/密码|校验|permission|denied|JWT/i.test(msg)) backToGate(msg);
+    else toast(msg);
   }
 
   $("#enterBtn").addEventListener("click", async () => {
     const key = $("#keyInput").value.trim();
-    if (!key) return;
+    if (!key) { $("#keyInput").focus(); return; }
     $("#gateErr").hidden = true;
+    const btn = $("#enterBtn");
+    btn.disabled = true;
     try {
       await rpc("admin_verify", { p_key: key });
       enter(key);
     } catch (err) {
       $("#gateErr").textContent = err.message || "校验失败";
       $("#gateErr").hidden = false;
-    }
+    } finally { btn.disabled = false; }
   });
 
   $("#keyInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") $("#enterBtn").click();
   });
 
-  $("#passBtn").addEventListener("click", async () => {
-    const next = (prompt("设置新的管理密码（至少 8 位，记牢）") || "").trim();
-    if (!next) return;
-    if (next.length < 8) { toast("新密码至少 8 位"); return; }
-    try {
-      await rpc("admin_set_key", { p_key: listKey, p_new_key: next });
-      listKey = next;
-      sessionStorage.setItem(KEY_STORE, next);
-      toast("密码已更新，下次用新密码进来");
-    } catch (err) {
-      toast(err.message || "改密码失败");
-    }
-  });
-
   $("#logoutBtn").addEventListener("click", () => {
-    sessionStorage.removeItem(KEY_STORE);
-    listKey = "";
-    $("#panel").hidden = true;
-    $("#gate").hidden = false;
-    $("#logoutBtn").hidden = true;
-    $("#passBtn").hidden = true;
+    backToGate("");
+    $("#gateErr").hidden = true;
+    $("#keyInput").value = "";
   });
 
-  $("#reloadBtn").addEventListener("click", () => { toast("已重载"); load().catch(onFail); });
+  $("#reloadBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await load(); toast("已刷新"); } catch (err) { onFail(err); } finally { btn.disabled = false; }
+  });
+
+  /* ---------------- 改密码（页面内表单，不用 prompt） ---------------- */
+  function openPass() {
+    $("#newPass").value = "";
+    $("#newPass2").value = "";
+    $("#passErr").hidden = true;
+    $("#passSeg").textContent = "";
+    $("#passMask").hidden = false;
+    setTimeout(() => $("#newPass").focus(), 120);
+  }
+  function closePass() { $("#passMask").hidden = true; }
+  $("#passBtn").addEventListener("click", openPass);
+  $("#passCancel").addEventListener("click", closePass);
+  $("#passMask").addEventListener("click", (e) => { if (e.target.id === "passMask") closePass(); });
+
+  $("#newPass").addEventListener("input", () => {
+    const v = $("#newPass").value;
+    $("#passSeg").textContent = v ? ("长度 " + v.length + " 位" + (v.length < 8 ? "，还差 " + (8 - v.length) + " 位" : "，够长")) : "";
+  });
+
+  $("#passSave").addEventListener("click", async () => {
+    const a = $("#newPass").value.trim();
+    const b = $("#newPass2").value.trim();
+    const err = $("#passErr");
+    err.hidden = true;
+    if (a.length < 8) { err.textContent = "新密码至少 8 位"; err.hidden = false; return; }
+    if (a !== b) { err.textContent = "两次输入不一致"; err.hidden = false; return; }
+    const btn = $("#passSave");
+    btn.disabled = true;
+    try {
+      await rpc("admin_set_key", { p_key: listKey, p_new_key: a });
+      listKey = a;
+      sessionStorage.setItem(KEY_STORE, a);
+      closePass();
+      toast("密码已更新，旧密码立即失效");
+    } catch (e) {
+      err.textContent = e.message || "改密码失败";
+      err.hidden = false;
+    } finally { btn.disabled = false; }
+  });
+
+  /* ---------------- 清空全部码 ---------------- */
+  $("#clearBtn").addEventListener("click", async () => {
+    let issued = $("#sIssued").textContent;
+    askConfirm(
+      "清空全部邀请码",
+      "池子里现在 " + cards.length + " 条（累计发放 " + issued + "）。清空后码、揭晓记录、关联举报都会删掉，接力计数归零，不能撤销。",
+      "全部清空",
+      async () => {
+        const res = await rpc("admin_clear_codes", { p_key: listKey });
+        toast("已清空 " + (res.removed != null ? res.removed : "") + " 个码");
+        await load();
+      }
+    );
+  });
 
   document.querySelectorAll(".adm-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -298,21 +418,33 @@
 
   $("#codeBody").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const id = btn.dataset.id;
     const card = cards.find((c) => c.id === id);
     if (!card) return;
-    try {
-      if (btn.dataset.act === "del") {
-        if (!confirm("删除 " + card.code + "？删掉后队列会重新排顺位。")) return;
+
+    if (btn.dataset.act === "del") {
+      askConfirm("删除这个邀请码", card.code + " 删掉后队列会重新排顺位，这条码的揭晓记录也会一起清掉。", "删除", async () => {
         await rpc("admin_delete_code", { p_id: id, p_key: listKey });
         toast("已删除 " + card.code);
-      } else if (btn.dataset.act === "down") {
+        await load();
+      });
+      return;
+    }
+
+    if (btn.dataset.act === "down") {
+      askConfirm("下架这个邀请码", card.code + " 下架后不再出现在首页可揭列表，已揭到的人仍能看自己那条记录。", "下架", async () => {
         await rpc("admin_update", { p_id: id, p_key: listKey, p_status: "expired" });
         toast("已下架 " + card.code);
-      } else if (btn.dataset.act === "up") {
-        await rpc("admin_update", { p_id: id, p_key: listKey, p_status: "available", p_remaining: 1 });
-        toast("已恢复 " + card.code);
+        await load();
+      });
+      return;
+    }
+
+    try {
+      if (btn.dataset.act === "up") {
+        await rpc("admin_update", { p_id: id, p_key: listKey, p_status: "available", p_remaining: card.totalSpots });
+        toast("已恢复 " + card.code + "，可揭 " + card.totalSpots + " 次");
       } else if (btn.dataset.act === "top") {
         await rpc("admin_update", { p_id: id, p_key: listKey, p_position: 1 });
         toast("已置顶 " + card.code);
@@ -336,6 +468,12 @@
     } catch (err) {
       toast(err.message || "操作失败");
     }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("#passMask").hidden) closePass();
+    else if (!$("#confirmMask").hidden) closeConfirm();
   });
 
   if (listKey) enter(listKey);
