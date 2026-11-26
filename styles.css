@@ -522,6 +522,9 @@ input::placeholder { color: var(--muted-2); }
 
 .rules { margin-top: 34px; }
 .rules h2 { margin: 0 0 14px; font-size: 18px; }
+.rules-block + .rules-block { margin-top: 20px; }
+.rules-block h3 { margin: 0 0 10px; padding-left: 9px; border-left: 3px solid var(--blue);
+                  font-size: 14px; color: var(--ink); }
 .rules ol {
   list-style: none;
   margin: 0;
