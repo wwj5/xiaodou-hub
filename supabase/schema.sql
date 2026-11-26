@@ -312,6 +312,8 @@ declare
   v_visitor  text := public.hub_hash(p_token);
   v_row      public.invite_codes;
   v_today_n  integer;
+  v_total_n  integer;
+  v_pub_n    integer;
   v_hourly   integer;
   v_remaining integer;
 begin
@@ -342,6 +344,20 @@ begin
    where visitor_hash = v_visitor and created_at >= now() - interval '1 hour';
   if v_hourly >= 30 then
     raise exception '操作太频繁，先歇一会儿' using errcode = 'P0001';
+  end if;
+
+  -- 免费纯接力：接过 2 个码还没往池子里放过任何一个，就先别接着接了
+  select count(*) into v_total_n
+    from public.reports
+   where visitor_hash = v_visitor and action = 'reveal';
+  if v_total_n >= 2 then
+    select count(*) into v_pub_n
+      from public.publish_log
+     where visitor_hash = v_visitor;
+    if v_pub_n = 0 then
+      raise exception '接力规则：你已经接过 2 个邀请码，还没往池子里放过码。先分享一个自己的码，再继续揭晓'
+        using errcode = 'P0001';
+    end if;
   end if;
 
   v_remaining := v_row.remaining_spots - 1;

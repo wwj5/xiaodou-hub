@@ -286,10 +286,16 @@
     },
     async reveal(id, token) {
       const s = this.read();
+      s.revealTotal = s.revealTotal || {};
       const rec = s.reveals[token];
       const used = rec && rec.date === beijingDate() ? rec.n : 0;
       if (used >= CFG.dailyReveals) {
         throw fail("今天的揭晓次数用完了（每人每天 " + CFG.dailyReveals + " 次，北京时间 00:00 重置）");
+      }
+      const total = s.revealTotal[token] || 0;
+      const published = s.codes.filter((c) => c.creator === token).length;
+      if (total >= 2 && published === 0) {
+        throw fail("接力规则：你已经接过 2 个邀请码，还没往池子里放过码。先分享一个自己的码，再继续揭晓");
       }
       const row = s.codes.find((c) => c.id === id);
       if (!row) throw fail("这个邀请码不存在了");
@@ -299,6 +305,7 @@
       row.claimedCount += 1;
       if (row.remainingSpots <= 0) row.status = "used";
       s.reports[token + "|" + id] = true;
+      s.revealTotal[token] = total + 1;
       s.reveals[token] = { date: beijingDate(), n: used + 1 };
       this.write(s);
       return {
