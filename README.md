@@ -1,6 +1,6 @@
 # 小豆邀请码互助站（揭晓制）
 
-![小豆邀请码互助站](assets/share-cover-wide.jpg)
+<img alt="小豆邀请码互助站" src="assets/share-cover-wide.jpg" width="720">
 
 <p>
   <a href="https://github.com/wwj5/xiaodou-hub/actions/workflows/pages.yml"><img alt="部署" src="https://github.com/wwj5/xiaodou-hub/actions/workflows/pages.yml/badge.svg"></a>
@@ -167,3 +167,4 @@ python -m http.server 8787
 
 MIT，见 [LICENSE](LICENSE)。代码可以拿去改，改成你自己社群用的站也随意；但要保留版权声明，
 并且别把「小豆」「豆包」这些名字和 logo 拿来暗示官方授权。
+
