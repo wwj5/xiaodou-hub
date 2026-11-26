@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>小豆邀请码互助站</title>
+<meta name="description" content="社区互助：把小豆邀请码放进队列，需要的人自取。非官方项目。" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff6a3d'/%3E%3Ctext x='50' y='70' font-size='54' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E8%B1%86%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="topbar">
+  <a class="brand" href="./">
+    <span class="brand-mark">豆</span>
+    <span class="brand-text">
+      <strong>小豆互助站</strong>
+      <em>invite code hub</em>
+    </span>
+  </a>
+  <div class="topbar-actions">
+    <span class="disclaimer">非官方社区项目 · 邀请码由成员公开分享</span>
+    <button class="ghost-btn" id="adminBtn" type="button">管理密钥</button>
+    <button class="ghost-btn" id="refreshBtn" type="button">刷新</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">社区互助 · 先到先得</p>
+      <h1>小豆邀请码<br /><span>互助站</span></h1>
+      <p class="lede">
+        手里多出来的邀请码放进来，需要的人自己取走。队列按发布顺序排，
+        队首优先展示；每被领走一个，剩余次数自动减一，减到 0 自动下架。
+      </p>
+      <div class="hero-badge">
+        <span class="dot" id="heroDot"></span>
+        <span id="heroStatus">正在连接…</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <label>累计发放</label>
+        <b id="statIssued">—</b>
+        <small>条邀请码</small>
+      </div>
+      <div class="stat highlight">
+        <label>当前可领取</label>
+        <b id="statAvailable">—</b>
+        <small>条可用</small>
+      </div>
+      <div class="stat">
+        <label>可用次数</label>
+        <b id="statSpots">—</b>
+        <small>次剩余</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="passport" id="passport" hidden>
+    <div class="passport-head">
+      <span class="passport-label">NEXT IN QUEUE</span>
+      <span class="passport-rank" id="passportRank">顺位 #—</span>
+    </div>
+    <div class="passport-body">
+      <div class="passport-code" id="passportCode">—— —— ——</div>
+      <div class="passport-meta">
+        <div><label>剩余次数</label><b id="passportSpots">0 / 0</b></div>
+        <div><label>状态</label><b id="passportState">—</b></div>
+        <div><label>发布时间</label><b id="passportTime">—</b></div>
+      </div>
+    </div>
+    <div class="perf"></div>
+    <div class="passport-foot">
+      <div class="passport-actions">
+        <button class="primary-btn" id="passportCopy" type="button">复制邀请码</button>
+        <button class="line-btn" id="passportClaim" type="button">我已用掉一个（-1）</button>
+        <button class="line-btn" id="passportFeedback" type="button">反馈问题</button>
+      </div>
+      <span class="quota-hint" id="quotaHint">今日领取名额：—</span>
+    </div>
+  </section>
+
+  <section class="share-card">
+    <div class="share-head">
+      <div>
+        <h2>我要分享一个邀请码</h2>
+        <p>发布后会排到队尾。同一个人最多保留 1 个可用码。</p>
+      </div>
+      <span class="share-tip" id="shareTip">每人限 1 条</span>
+    </div>
+    <form class="share-form" id="shareForm" autocomplete="off">
+      <div class="field grow">
+        <label for="codeInput">邀请码</label>
+        <input id="codeInput" name="code" placeholder="粘贴你的小豆邀请码" spellcheck="false" maxlength="40" />
+      </div>
+      <div class="field narrow">
+        <label for="spotsInput">剩余次数</label>
+        <select id="spotsInput" name="spots"></select>
+      </div>
+      <button class="primary-btn submit" type="submit" id="shareSubmit">立即分享</button>
+    </form>
+    <p class="form-error" id="shareError" hidden></p>
+  </section>
+
+  <section class="queue">
+    <div class="queue-head">
+      <h2>队列</h2>
+      <div class="queue-tools">
+        <div class="segmented" id="filter">
+          <button type="button" data-status="available" class="active">可用</button>
+          <button type="button" data-status="used">已用完</button>
+          <button type="button" data-status="all">全部</button>
+        </div>
+        <div class="search">
+          <input id="searchInput" type="search" placeholder="搜索邀请码" spellcheck="false" />
+        </div>
+      </div>
+    </div>
+    <div class="list" id="list">
+      <div class="loading">正在加载队列…</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      本站为独立社区项目，与小豆官方无隶属关系，也未获授权。邀请码由成员自行分享，
+      有效性请自行判断；兑换请走小豆 App 内的官方邀请流程。
+    </p>
+    <p class="footer-meta">静态站点 · Supabase 共享数据 · 无账号体系</p>
+  </footer>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<div class="modal" id="adminModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>管理密钥</h3>
+      <button class="icon-btn" id="adminClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-note">
+        密钥不存在前端代码里，只保存在你自己的浏览器里。导入后可以调整任意码的剩余次数、
+        顺位和状态，也可以重新排队。
+      </p>
+      <div class="field">
+        <label for="adminKeyInput">密钥</label>
+        <input id="adminKeyInput" placeholder="粘贴管理员密钥" spellcheck="false" />
+      </div>
+      <p class="form-error" id="adminError" hidden></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="adminSave" type="button">导入并校验</button>
+        <button class="line-btn" id="adminClear" type="button">清除</button>
+      </div>
+      <div class="admin-panel" id="adminPanel" hidden>
+        <div class="admin-row">
+          <div class="field">
+            <label for="adminCodeInput">要修改的邀请码</label>
+            <input id="adminCodeInput" placeholder="输入池中已有的码" spellcheck="false" />
+          </div>
+        </div>
+        <div class="admin-grid">
+          <div class="field">
+            <label for="adminRemaining">剩余次数 (0–30)</label>
+            <input id="adminRemaining" type="number" min="0" max="30" step="1" />
+          </div>
+          <div class="field">
+            <label for="adminPosition">队列顺位</label>
+            <input id="adminPosition" type="number" min="1" step="1" />
+          </div>
+          <div class="field">
+            <label for="adminStatus">状态</label>
+            <select id="adminStatus">
+              <option value="">保持不变</option>
+              <option value="available">可用</option>
+              <option value="used">已用完</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-btn" id="adminApply" type="button">保存修改</button>
+          <button class="line-btn" id="adminReseed" type="button">顺位重排 1..N</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="feedbackModal" hidden>
+  <div class="modal-card compact">
+    <div class="modal-head">
+      <h3>反馈问题</h3>
+      <button class="icon-btn" id="feedbackClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="feedbackReason">原因</label>
+        <select id="feedbackReason">
+          <option value="invalid">邀请码无效</option>
+          <option value="used">已经被别人用掉</option>
+          <option value="wrong_info">信息不对（次数/描述）</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="feedbackNote">补充说明（可选，最多 300 字）</label>
+        <textarea id="feedbackNote" rows="3" maxlength="300"></textarea>
+      </div>
+      <p class="form-error" id="feedbackError" hidden></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="feedbackSubmit" type="button">提交</button>
+        <button class="line-btn" id="feedbackCancel" type="button">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
