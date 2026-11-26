@@ -58,6 +58,12 @@
   .adm-tag.available { background: #e6f6ea; color: #1e7c3c; }
   .adm-tag.used, .adm-tag.expired { background: #f1f1f3; color: #6b7280; }
   .adm-act { display: flex; gap: 6px; flex-wrap: wrap; }
+  .adm-codes { max-width: 210px; }
+  .adm-codes.muted { color: var(--muted); }
+  .adm-code { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+              font-size: 12px; padding: 1px 6px; border-radius: 6px; margin: 1px 3px 1px 0; white-space: nowrap; }
+  .adm-code.got { background: #eaf1ff; color: #2f65e3; border: 1px solid #cfdefb; }
+  .adm-code.gave { background: #e9f7ee; color: #1e7c3c; border: 1px solid #c9ecd5; }
   .adm-mini { appearance: none; border: 1px solid var(--line); background: #fff; border-radius: 7px;
               padding: 3px 9px; font-size: 12px; font-family: inherit; color: #33415c; cursor: pointer; }
   .adm-mini:hover { border-color: var(--blue); color: var(--blue); }
@@ -152,7 +158,8 @@
       <h2>接力账本 <span id="ledgerCount" style="color:var(--muted);font-weight:400"></span></h2>
       <p class="hint">
         按设备指纹统计（浏览器本地算的匿名 ID，不记 IP、不记姓名、不可反查真人）：
-        揭晓几个、回填几个、欠几个，欠码的排最前。限制后这人再点「揭晓」会被直接拒绝。
+        揭晓几个、回填几个、欠几个，欠码的排最前。中间两列是这个设备「揭走了哪些码」「放回来哪些码」，
+        两边对不上就是欠着的那一条。限制后这人再点「揭晓」会被直接拒绝。
       </p>
       <div class="adm-bar adm-bar-tight">
         <label class="adm-check"><input type="checkbox" id="ledgerOnly" /> 只看欠码的</label>
@@ -170,7 +177,7 @@
       <table class="adm-table" id="ledgerTable">
         <thead>
           <tr>
-            <th>设备指纹</th><th>揭晓</th><th>回填</th><th>欠</th><th>最后活跃</th><th>状态</th><th>操作</th>
+            <th>设备指纹</th><th>揭走的码</th><th>放回的码</th><th>揭晓</th><th>回填</th><th>欠</th><th>最后活跃</th><th>状态</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="ledgerBody"></tbody>
@@ -495,8 +502,17 @@
       const act = r.blocked
         ? '<button class="adm-mini" data-ledger="unblock" data-hash="' + esc(r.hash) + '">解除限制</button>'
         : '<button class="adm-mini danger" data-ledger="block" data-hash="' + esc(r.hash) + '">限制揭晓</button>';
+      const codeCell = (arr, cls) => {
+        const list = Array.isArray(arr) ? arr : [];
+        if (!list.length) return '<td class="adm-codes muted">—</td>';
+        return '<td class="adm-codes">' + list.map((c) =>
+          '<code class="adm-code ' + cls + '">' + esc(c) + "</code>").join(" ") +
+          (list.length === 8 ? ' <span class="muted">…</span>' : "") + "</td>";
+      };
       return "<tr>" +
         '<td><code title="' + esc(r.hash) + '">' + esc(r.short) + "…</code></td>" +
+        codeCell(r.gotCodes, "got") +
+        codeCell(r.gaveCodes, "gave") +
         "<td>" + r.taken + "</td>" +
         "<td>" + r.returned + "</td>" +
         '<td>' + (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
@@ -521,9 +537,9 @@
 
   $("#ledgerExport").addEventListener("click", () => {
     if (!ledger.length) { toast("账本是空的，没东西可导"); return; }
-    const head = ["设备指纹", "揭晓", "回填", "欠", "最后活跃", "状态", "备注"];
+    const head = ["设备指纹", "揭走的码", "放回的码", "揭晓", "回填", "欠", "最后活跃", "状态", "备注"];
     const rows = ledger.map((r) => [
-      r.hash, r.taken, r.returned, r.pending,
+      r.hash, (r.gotCodes || []).join(" "), (r.gaveCodes || []).join(" "), r.taken, r.returned, r.pending,
       r.lastAt ? new Date(r.lastAt).toLocaleString("zh-CN") : "",
       r.blocked ? "已限制" : (r.pending > 0 ? "欠码" : "正常"),
       r.note || "",

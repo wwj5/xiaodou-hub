@@ -1032,14 +1032,16 @@ begin
 
   return (
     with rv as (
-      select r.visitor_hash as vh, count(*) as taken, max(r.created_at) as last_rev
+      select r.visitor_hash as vh, count(*) as taken, max(r.created_at) as last_rev,
+             (array_agg(c.code_norm order by r.created_at desc))[1:8] as got
         from public.reports r
         join public.invite_codes c on c.id = r.code_id
        where r.action = 'reveal' and c.status <> 'expired'
        group by 1
     ),
     pb as (
-      select c.creator_hash as vh, count(*) as returned, max(c.created_at) as last_pub
+      select c.creator_hash as vh, count(*) as returned, max(c.created_at) as last_pub,
+             (array_agg(c.code_norm order by c.created_at desc))[1:8] as gave
         from public.invite_codes c
        where c.creator_hash is not null and c.status <> 'expired'
        group by 1
@@ -1054,6 +1056,7 @@ begin
              greatest(coalesce(rv.taken, 0) - coalesce(pb.returned, 0), 0) as pending,
              greatest(coalesce(rv.last_rev, to_timestamp(0)),
                       coalesce(pb.last_pub, to_timestamp(0))) as last_at,
+             rv.got, pb.gave,
              b.visitor_hash is not null as blocked,
              coalesce(b.kind, '') as block_kind,
              b.note
@@ -1069,6 +1072,8 @@ begin
                'taken',   a.taken,
                'returned', a.returned,
                'pending', a.pending,
+               'gotCodes', coalesce(to_json(a.got), '[]'::json),
+               'gaveCodes', coalesce(to_json(a.gave), '[]'::json),
                'lastAt',  case when a.last_at = to_timestamp(0) then null else a.last_at end,
                'blocked', a.blocked,
                'blockKind', a.block_kind,
