@@ -221,7 +221,7 @@ $$;
 create or replace function public.hub_card_public(p_row public.invite_codes)
 returns json
 language sql
-immutable
+stable
 set search_path = public, pg_temp
 as $$
   select json_build_object(
@@ -232,7 +232,9 @@ as $$
     'remainingSpots', p_row.remaining_spots,
     'claimedCount',   p_row.claimed_count,
     'queueRank',      p_row.queue_rank,
-    'createdAt',      p_row.created_at
+    'createdAt',      p_row.created_at,
+    -- 15 分钟内放进来的算「实时新码」，前端置顶并打标
+    'fresh',          p_row.created_at >= now() - interval '15 minutes'
   );
 $$;
 
@@ -315,7 +317,7 @@ begin
                 else true
               end)
          and (v_query = '' or c.code_norm like '%' || v_query || '%')
-       order by c.queue_rank asc, c.created_at asc
+       order by (c.created_at >= now() - interval '15 minutes') desc, c.created_at desc
        limit v_limit offset v_offset
     ) t;
 
@@ -397,8 +399,29 @@ begin
     v_hint := '（这次不算回填，限制还没解除，得重新放一个有效的邀请码）';
   end if;
 
-  if length(v_norm) < 4 or length(v_norm) > 32 then
-    raise exception '邀请码长度需为 4–32 位字母或数字%', v_hint using errcode = 'P0001';
+  -- ---- 格式校验：专收小豆 6 位「字母+数字」码，乱七八糟的一律不收 ----
+  if length(v_norm) <> 6 then
+    raise exception '邀请码必须是 6 位，你填的是 % 位%', length(v_norm), v_hint
+      using errcode = 'P0001';
+  end if;
+  if v_norm !~ '[A-Z]' or v_norm !~ '[0-9]' then
+    raise exception '邀请码必须字母和数字都有；纯字母、纯数字的码本站不收%', v_hint
+      using errcode = 'P0001';
+  end if;
+  if v_norm ~ '[A-Z]{3}' then
+    raise exception '邀请码里不能有 3 个字母连在一起（像乱填的），本站不收%', v_hint
+      using errcode = 'P0001';
+  end if;
+  if v_norm ~ '[0-9]{3}' then
+    raise exception '邀请码里不能有 3 个数字连在一起（像乱填的），本站不收%', v_hint
+      using errcode = 'P0001';
+  end if;
+  if v_norm = any (array['OPENAI','CLOUD','GOOGLE','GITHUB','DOUBAO','PYTHON','MOBILE','SERVER','WINDOW','SYSTEM','PUBLIC','MASTER','SECRET']) then
+    raise exception '这看着是英文单词，不是邀请码，本站不收%', v_hint using errcode = 'P0001';
+  end if;
+  if v_norm ~ '(91|78|13|27)' then
+    raise exception '邀请码里带了不合适的数字（91 / 78 / 13 / 27），本站不收%', v_hint
+      using errcode = 'P0001';
   end if;
   if v_spots < 1 or v_spots > 30 then
     raise exception '剩余次数必须是 1–30 的整数%', v_hint using errcode = 'P0001';

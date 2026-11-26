@@ -345,6 +345,7 @@ body {
 }
 .code-card:hover { border-color: rgba(47, 101, 227, .55); transform: translateY(-1px); }
 .code-card.mine { border-color: rgba(47, 101, 227, .55); box-shadow: 0 0 0 3px var(--blue-soft) inset; }
+.code-card.fresh { border-color: rgba(255, 122, 26, .5); box-shadow: 0 0 0 3px rgba(255, 138, 41, .1) inset; }
 
 .cc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cc-rank { font-size: 11.5px; color: var(--muted-2); letter-spacing: .04em; font-family: var(--mono); }
@@ -356,6 +357,10 @@ body {
   color: var(--blue);
 }
 .cc-tag.done { background: var(--green-soft); color: var(--green); }
+.cc-tag.fresh { background: #fff1e3; color: #d9670a; font-weight: 700; }
+@media (prefers-color-scheme: dark) {
+  .cc-tag.fresh { background: #3a2414; color: #ffb066; }
+}
 
 .cc-code {
   font-family: var(--mono);

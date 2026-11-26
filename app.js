@@ -10,8 +10,8 @@
     {
       supabaseUrl: "",
       supabaseKey: "",
-      codeMinLen: 4,
-      codeMaxLen: 32,
+      codeMinLen: 6,
+      codeMaxLen: 6,
       maxSpots: 30,
       dailyReveals: 2,
       maxPublish: 1,
@@ -93,6 +93,21 @@
     return String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
+  const CODE_WORDS = ["OPENAI", "CLOUD", "GOOGLE", "GITHUB", "DOUBAO", "PYTHON",
+                      "MOBILE", "SERVER", "WINDOW", "SYSTEM", "PUBLIC", "MASTER", "SECRET"];
+
+  /** 校验一枚码是否符合本站收录规则；返回错误文案，合法则返回 "" */
+  function codeProblem(norm) {
+    const c = normalizeCode(norm);
+    if (c.length !== 6) return "邀请码必须是 6 位，你填的是 " + c.length + " 位";
+    if (!/[A-Z]/.test(c) || !/[0-9]/.test(c)) return "邀请码必须字母和数字都有；纯字母、纯数字的码本站不收";
+    if (/[A-Z]{3}/.test(c)) return "邀请码里不能有 3 个字母连在一起（像乱填的），本站不收";
+    if (/[0-9]{3}/.test(c)) return "邀请码里不能有 3 个数字连在一起（像乱填的），本站不收";
+    if (CODE_WORDS.indexOf(c) >= 0) return "这看着是英文单词，不是邀请码，本站不收";
+    if (/(91|78|13|27)/.test(c)) return "邀请码里带了不合适的数字（91 / 78 / 13 / 27），本站不收";
+    return "";
+  }
+
   /** 从官方邀请链接里把邀请码捞出来；也容忍「邀请码：ABCD」这类文本 */
   function extractCode(input) {
     const text = String(input || "").trim();
@@ -117,7 +132,7 @@
         const segs = url.pathname.split("/").filter(Boolean);
         for (let i = segs.length - 1; i >= 0; i -= 1) {
           const c = normalizeCode(segs[i]);
-          if (/^[A-Za-z0-9]{4,32}$/.test(segs[i]) && c.length >= CFG.codeMinLen) return c;
+          if (/^[A-Za-z0-9]{6,32}$/.test(segs[i]) && c.length >= CFG.codeMinLen) return c;
         }
       } catch (e) { /* 不是合法 URL，落到下面的文本解析 */ }
       // 链接里没解析出参数，再看 ?xxx=CODE 这种土办法
@@ -130,7 +145,7 @@
     }
 
     // 2) 文本里带「邀请码」字样
-    const labeled = text.match(/邀请码[^A-Za-z0-9]{0,6}([A-Za-z0-9]{4,32})/);
+    const labeled = text.match(/邀请码[^A-Za-z0-9]{0,6}([A-Za-z0-9]{6})/);
     if (labeled) return normalizeCode(labeled[1]);
 
     // 3) 干脆就是一串码
@@ -305,6 +320,7 @@
         claimedCount: c.claimedCount,
         queueRank: c.queueRank,
         createdAt: c.createdAt,
+        fresh: Date.now() - new Date(c.createdAt).getTime() < 15 * 60 * 1000,
       };
     },
     quota(token, s) {
@@ -319,15 +335,16 @@
       if (status === "available") rows = rows.filter((c) => c.status === "available");
       else if (status === "used") rows = rows.filter((c) => c.status !== "available");
       if (norm) rows = rows.filter((c) => c.code.includes(norm));
-      rows.sort((a, b) => (status === "used" ? b.claimedCount - a.claimedCount : a.queueRank - b.queueRank));
+      rows.sort((a, b) => (status === "used"
+        ? b.claimedCount - a.claimedCount
+        : new Date(b.createdAt) - new Date(a.createdAt)));
       return { ok: true, cards: rows.map((c) => this.card(c)), stats: this.stats(s), quota: this.quota(token, s) };
     },
     async publish(code, spots, token) {
       const s = this.read();
       const norm = normalizeCode(code);
-      if (norm.length < CFG.codeMinLen || norm.length > CFG.codeMaxLen) {
-        throw fail("邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字");
-      }
+      const bad = codeProblem(norm);
+      if (bad) throw fail(bad);
       if (spots < 1 || spots > CFG.maxSpots) throw fail("剩余次数必须是 1–30 的整数");
       if (s.codes.some((c) => c.code === norm)) throw fail("该邀请码已经在池里了");
       if (s.codes.some((c) => c.creator === token && c.status === "available")) {
@@ -475,11 +492,12 @@
     if (!state.avail.length) { list.innerHTML = ""; return; }
 
     const blocked = !!(state.relay && state.relay.blocked);
-    list.innerHTML = state.avail.map((c) => {
+    list.innerHTML = state.avail.map((c, i) => {
       const got = mine.get(c.id);
-      const cls = got ? " mine" : "";
+      const cls = (got ? " mine" : "") + (c.fresh ? " fresh" : "");
       const codeCls = got ? "cc-code revealed" : "cc-code";
-      const tag = got ? '<span class="cc-tag done">已领取</span>' : '<span class="cc-tag">可揭晓</span>';
+      const freshTag = c.fresh ? '<span class="cc-tag fresh">实时新码</span>' : "";
+      const tag = got ? '<span class="cc-tag done">已领取</span>' : freshTag + '<span class="cc-tag">可揭晓</span>';
       const actions = got
         ? '<button class="mini-btn solid" data-act="copy" data-id="' + esc(c.id) + '">复制</button>'
         : (blocked
@@ -487,7 +505,7 @@
           : '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">点击揭晓</button>');
       return (
         '<article class="code-card' + cls + '">' +
-          '<div class="cc-top"><span class="cc-rank">#' + c.queueRank + "</span>" + tag + "</div>" +
+          '<div class="cc-top"><span class="cc-rank">#' + (i + 1) + "</span>" + tag + "</div>" +
           '<div class="' + codeCls + '">' + esc(got ? got.code : c.mask) + "</div>" +
           '<div class="cc-meta"><span>剩余 ' + c.remainingSpots + " / " + c.totalSpots + " 次</span>" +
             "<span>已揭 " + c.claimedCount + " 次</span><span>" + timeAgo(c.createdAt) + "</span></div>" +
@@ -624,8 +642,9 @@
         errBox.hidden = false;
         return;
       }
-      if (code.length < CFG.codeMinLen || code.length > CFG.codeMaxLen) {
-        errBox.textContent = "邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字";
+      const bad = codeProblem(code);
+      if (bad) {
+        errBox.textContent = bad;
         errBox.hidden = false;
         return;
       }

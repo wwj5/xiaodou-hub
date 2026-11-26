@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=29" />
+<link rel="stylesheet" href="styles.css?v=30" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -229,9 +229,9 @@
     <form class="modal-body" id="shareForm" autocomplete="off">
       <div class="field">
         <label for="codeInput">邀请码或官方邀请链接</label>
-        <input id="codeInput" name="code" placeholder="粘贴邀请码，或分享链接" spellcheck="false" maxlength="400" />
+        <input id="codeInput" name="code" placeholder="6 位字母+数字，如 A1B2C9" spellcheck="false" maxlength="400" />
       </div>
-      <p class="modal-note">请提交真实、能用的邀请码。填错的、别人已经用过的、已经被下架的码都不算回填，限制不会解除，得重新放一个有效的。</p>
+      <p class="modal-note">只收小豆 App 里的 6 位邀请码，必须字母和数字都有：全字母、全数字、5 位、3 个字母或 3 个数字连在一起的、含 91/78/13/27 的一律不收。填错的、别人用过的、已被下架的码都不算回填，限制不会解除。</p>
       <p class="form-error" id="shareError" hidden></p>
       <div class="modal-actions">
         <button class="primary-btn" id="shareSubmit" type="submit">提交邀请码</button>
@@ -289,7 +289,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
 
