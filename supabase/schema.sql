@@ -400,6 +400,7 @@ declare
   v_visitor text := public.hub_hash(p_token);
   v_row     public.invite_codes;
   v_today   integer;
+  v_reports integer;
 begin
   select * into v_row from public.invite_codes where id = p_id;
   if not found then
@@ -424,7 +425,17 @@ begin
   insert into public.feedback (code_id, code, reason, note, visitor_hash)
   values (p_id, v_row.code, p_reason, left(coalesce(p_note, ''), 300), v_visitor);
 
-  return json_build_object('ok', true);
+  -- 自动下架：同一个码被 2 个不同的人举报（任意原因），先摘出池子等人工核验
+  select count(distinct f.visitor_hash) into v_reports
+    from public.feedback f
+   where f.code_id = p_id;
+  if v_reports >= 2 and v_row.status = 'available' then
+    update public.invite_codes
+       set status = 'expired', updated_at = now()
+     where id = p_id;
+  end if;
+
+  return json_build_object('ok', true, 'autoClosed', v_reports >= 2);
 end;
 $$;
 

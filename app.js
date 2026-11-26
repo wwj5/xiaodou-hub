@@ -36,12 +36,55 @@
     ));
   }
 
+  function shortHash(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  /** 轻量设备指纹：清掉 localStorage 也还是同一个人，避免"清缓存换新身份"无限领免费码 */
+  function fingerprint() {
+    let canvas = "";
+    try {
+      const c = document.createElement("canvas");
+      c.width = 140;
+      c.height = 44;
+      const ctx = c.getContext("2d");
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#f60";
+      ctx.fillRect(0, 0, 140, 44);
+      ctx.fillStyle = "#06c";
+      ctx.font = "15px Arial";
+      ctx.fillText("xiaodou-hub-fp", 5, 8);
+      ctx.fillStyle = "rgba(102,204,0,.65)";
+      ctx.fillText("xiaodou-hub-fp", 7, 22);
+      canvas = c.toDataURL().slice(-90);
+    } catch (e) {
+      canvas = "";
+    }
+    const parts = [
+      navigator.userAgent,
+      navigator.language,
+      (navigator.languages || []).join(","),
+      (Intl.DateTimeFormat().resolvedOptions().timeZone || ""),
+      screen.width + "x" + screen.height + "x" + screen.colorDepth,
+      window.devicePixelRatio || 1,
+      navigator.hardwareConcurrency || "",
+      navigator.deviceMemory || "",
+      canvas,
+    ].join("|");
+    return "fp" + shortHash(parts);
+  }
+
   function visitorToken() {
-    let t = localStorage.getItem(TOKEN_KEY);
-    if (!t) {
-      t = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()) +
-          Date.now().toString(36);
-      localStorage.setItem(TOKEN_KEY, t);
+    let t = null;
+    try { t = localStorage.getItem(TOKEN_KEY); } catch (e) { t = null; }
+    if (!t || t.slice(0, 2) !== "fp") {
+      t = fingerprint();
+      try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
     }
     return t;
   }
@@ -589,10 +632,11 @@
       const err = $("#feedbackError");
       err.hidden = true;
       try {
-        await api.feedback(state.feedbackTarget.id, $("#feedbackReason").value, $("#feedbackNote").value.trim());
+        const r = await api.feedback(state.feedbackTarget.id, $("#feedbackReason").value, $("#feedbackNote").value.trim());
         $("#feedbackModal").hidden = true;
         $("#feedbackNote").value = "";
-        toast("反馈已提交，谢谢");
+        toast(r && r.autoClosed ? "已收到，这个码举报够了，先摘下等核验" : "反馈已提交，谢谢");
+        await load();
       } catch (e) { err.textContent = e.message; err.hidden = false; }
     });
 
