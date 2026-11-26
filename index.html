@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=15" />
+<link rel="stylesheet" href="styles.css?v=16" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -166,11 +166,12 @@
       <h3>接力玩法，先说清楚</h3>
       <button class="icon-btn" id="noticeClose" type="button" aria-label="关闭">×</button>
     </div>
-    <ol class="notice-list">
-      <li><b>第一个人先放码</b><span>池子里得先有码，第二个人才有东西可揭晓。</span></li>
+    <p class="modal-note">这是一个纯接力的邀请码池：码都是成员自己放回来的，不收钱，也不卖码。</p>
+    <ul class="notice-list">
       <li><b>揭晓是独家的</b><span>一个码只放给一个人，你揭到就是你的，别人再点就没有了。</span></li>
-      <li><b>一个人只邀请一个</b><span>你注册完，记得回填自己的邀请码，下一个人才能接上；只拿不放，接下一个时会被拦住。</span></li>
-    </ol>
+      <li><b>回填全靠自觉</b><span>注册完请把自己的邀请码放回来。没有强制、也没人催，系统最多拦你揭下一个；真正让池子里有码的，是每个人自己放回来。</span></li>
+      <li><b>不回填的后果</b><span>池子会空。下一个人点开，只有一句“暂时没有可领取的邀请码”。</span></li>
+    </ul>
     <label class="notice-check">
       <input id="noticeToday" type="checkbox" />
       <span>今天不再显示这个公告</span>
@@ -250,8 +251,9 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
+
 
 
