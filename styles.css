@@ -580,6 +580,9 @@ input::placeholder { color: var(--muted-2); }
   cursor: pointer;
 }
 .foot-links a:hover, .foot-link:hover { color: var(--blue); }
+.foot-contact { margin-top: 4px; }
+.foot-contact a { color: var(--muted); text-decoration: none; }
+.foot-contact a:hover { color: var(--blue); text-decoration: underline; }
 
 /* ------------------------------------------------------------ Toast / 弹窗 */
 
