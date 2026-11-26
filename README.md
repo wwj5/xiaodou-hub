@@ -93,7 +93,7 @@
 - 邀请码本身仍可能被别人抢先兑换；揭晓制只是把"谁先看到"拉平，不能保证兑换一定成功。
 - `list_codes` 的 `p_query` 参数还在（能验证"池里有没有这个码"，拿不到明文），但页面已经没有搜索框；
   真要彻底关掉，把它固定传空字符串或在函数里删掉这段过滤即可。
-- 管理密钥是高权限凭据，只应放在管理员自己的设备上，别进仓库、别发群。
+- 管理密码是高权限凭据，只应放在管理员自己的设备上，别进仓库、别发群。
 - Supabase Security Advisor 仍会把「anon 可执行 SECURITY DEFINER」标成警告，这是匿名 RPC 架构必然提示。
 
 ## 七、当前线上实例
@@ -105,19 +105,31 @@
 | Supabase 项目 | `cusioozwyyrdghgvaaqw` · 组织 `xiaodou` · 区域 Southeast Asia (Singapore) · FREE |
 | 后端 URL | https://cusioozwyyrdghgvaaqw.supabase.co |
 | 前端配置 | `config.js` 里 `supabaseUrl` + anon key（anon key 是公开可暴露的，RLS 兜底） |
-| 管理密钥 | 只写在本地 `.supabase-keys.txt`（已 gitignore，不进仓库） |
+| 管理密码 | 只写在本地 `.supabase-keys.txt` 的 `admin_key` 一行（已 gitignore，不进仓库） |
 | 数据库密码 | 只写在本地 `.supabase-db-password.txt`（已 gitignore）；丢了可在 Dashboard → Settings → Database 重置 |
 
 改代码后 `git push origin main`，GitHub Actions 自动重跑并发布，约 30 秒上线。
 
-## 八、本地预览
+## 八、管理后台
+
+独立页面 `/admin.html`（首页页脚「管理入口」进入，`noindex`，只靠密码把门）：
+
+- 输入管理密码 → `admin_verify` 校验，密码只存 sessionStorage，关浏览器即失效；
+- 四张统计卡：累计发放 / 当前可揭 / 今日揭晓 / 待处理举报；
+- 全量码表（明文、状态、剩余/总、顺位、已揭、发布时间），每行可「下架 / 恢复 / 置顶 / 删除」；
+- 待处理举报列表，可「标记已处理」，或「下架该码并处理」一键联动；
+- 右上「改密码」调 `admin_set_key`（新密码 ≥ 8 位），改完立刻生效。
+
+对应 RPC：`admin_list`、`admin_delete_code`、`admin_resolve_report`、`admin_set_key`（都先过 `hub_require_admin`，anon 可调但没密码就是「管理密码不对」）。
+
+## 九、本地预览
 
 ```bash
 python -m http.server 8787
 # 打开 http://127.0.0.1:8787
 ```
 
-## 九、表结构速览
+## 十、表结构速览
 
 | 表 | 作用 |
 |---|---|
@@ -125,9 +137,9 @@ python -m http.server 8787
 | `reports` | 揭晓记录：去重 + 每日配额 + 「每人每天 2 次」计数 |
 | `publish_log` | 发布流水，用于全站限流 |
 | `feedback` | 反馈收件箱 |
-| `app_settings` | 单行通用管理密钥的 SHA-256 |
+| `app_settings` | 单行管理密码的 SHA-256（页面右上「改密码」可换） |
 
-## 十、已验证
+## 十一、已验证
 
 - 线上 Supabase 实测（anon key 直调 RPC）：`list_codes` 只给 `mask`、`publish_code` 成功入队、
   `reveal_code` 出码并让 `revealedCount` 从 0 → 1。
