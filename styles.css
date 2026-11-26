@@ -520,15 +520,16 @@ input::placeholder { color: var(--muted-2); }
 
 /* ------------------------------------------------------------ 规则 */
 
-.rules { margin-top: 34px; }
-.rules h2 { margin: 0 0 8px; font-size: 18px; }
+.rules { margin-top: 34px; padding: 18px 20px; border-radius: var(--radius);
+         border: 1px solid rgba(47, 107, 237, .16); background: var(--blue-soft); }
+.rules h2 { margin: 0 0 8px; font-size: 16.5px; }
 .rules-intro { margin: 0 0 16px; font-size: 13px; color: var(--muted); line-height: 1.75; }
 .rules-open { margin-bottom: 4px; }
 .modal-card.how { width: min(640px, 100%); }
 .how-cols { display: grid; gap: 12px; margin: 14px 0 12px; }
 @media (min-width: 640px) { .how-cols { grid-template-columns: 1fr 1fr; align-items: start; } }
-.rules-block { padding: 16px 20px; border-radius: var(--radius); border: 1px solid var(--line);
-               background: var(--surface); }
+.rules-block { padding: 16px 20px; border-radius: var(--radius);
+               border: 1px solid rgba(47, 107, 237, .16); background: var(--blue-soft); }
 .rules-block + .rules-block { margin-top: 12px; }
 .rules-block h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 9px;
                   font-size: 14.5px; color: var(--ink); }
@@ -536,21 +537,20 @@ input::placeholder { color: var(--muted-2); }
                      background: var(--blue); color: #fff; font-size: 12px; display: grid; place-items: center; }
 .rules-steps { display: grid; }
 .rules-steps .rd { display: flex; gap: 11px; align-items: flex-start; padding: 11px 0;
-                   border-top: 1px solid var(--line); }
+                   border-top: 1px solid rgba(47, 107, 237, .16); }
 .rules-steps .rd:first-child { border-top: 0; padding-top: 4px; }
 .rules-steps .rd > span { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; border-radius: 999px;
-                          background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 700;
+                          background: var(--surface); color: var(--blue); font-size: 12px; font-weight: 700;
                           display: grid; place-items: center; }
 .rules-steps .rd b { font-size: 13.5px; color: var(--ink); }
 .rules-steps .rd p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.65; }
-.rules-note { margin-top: 14px; padding: 14px 18px; border-radius: var(--radius); background: var(--blue-soft); }
-.rules-note p { margin: 0; font-size: 12.5px; color: #3c4a63; line-height: 1.75; }
+.rules-note { margin-top: 14px; padding: 2px 0 2px 13px; border-left: 3px solid var(--blue); }
+.rules-note p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.75; }
 .rules-note p + p { margin-top: 8px; }
 .rules-note b { color: var(--ink); }
 @media (prefers-color-scheme: dark) {
-  .rules-note { background: #18233a; }
-  .rules-note p { color: var(--muted); }
-  .rules-note b { color: var(--ink); }
+  .rules, .rules-block { border-color: rgba(120, 160, 255, .22); }
+  .rules-steps .rd { border-top-color: rgba(255, 255, 255, .1); }
 }
 .site-foot {
   margin-top: 42px;
@@ -668,4 +668,5 @@ input::placeholder { color: var(--muted-2); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
 
