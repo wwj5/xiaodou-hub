@@ -448,14 +448,21 @@
     const pending = relayPending();
     const strip = $("#relayStrip");
     if (!strip) return;
-    strip.hidden = pending <= 0;
+    const voided = Number((state.relay && state.relay.voided) || 0);
+    const voidedTip = voided > 0
+      ? "注意：你放回的 " + voided + " 个码被下架了（下架/无效的码不算回填），欠的还得再放一个能用的。"
+      : "";
+    strip.hidden = pending <= 0 && !voidedTip;
     if (pending > 0) {
       const mins = Number(state.stats && state.stats.graceMinutes);
       const tail = mins > 0
         ? "超过 " + mins + " 分钟没放回来，这台设备会被自动限制，放回后自动解除。"
         : "先把你的邀请码放回来，才能接下一个。";
       $("#relayText").textContent =
-        "你从池子里接过 " + pending + " 个码还没还。" + tail;
+        "你从池子里接过 " + pending + " 个码还没还。" + tail + (voidedTip ? " " + voidedTip : "");
+      strip.hidden = false;
+    } else if (voidedTip) {
+      $("#relayText").textContent = voidedTip;
     } else if (state.relay && state.relay.blocked) {
       $("#relayText").textContent = "这台设备已被限制揭晓：先把自己的邀请码放回来，放回后自动解除。";
       strip.hidden = false;

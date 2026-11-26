@@ -352,6 +352,11 @@ begin
       'taken', v_taken,
       'returned', v_return,
       'pending', greatest(0, v_taken - v_return),
+      -- 我放回过、但后来被下架/删掉的码：这些不算回填，欠的账还得再放一个
+      'voided', (
+        select count(*) from public.invite_codes c
+         where c.creator_hash = v_hash and c.status = 'expired'
+      ),
       'blocked', (v_taken >= v_return + 1) or exists (
         select 1 from public.visitor_blocks b where b.visitor_hash = v_hash
       ),
@@ -383,30 +388,45 @@ declare
   v_recent  integer;
   v_rank    integer;
   v_row     public.invite_codes;
+  v_blocked boolean;
+  v_hint    text := '';
 begin
+  -- 提交失败一律不算回填：如果这台设备正被限制，提示里说清楚"限制还没解除"
+  v_blocked := exists (select 1 from public.visitor_blocks b where b.visitor_hash = v_visitor);
+  if v_blocked then
+    v_hint := '（这次不算回填，限制还没解除，得重新放一个有效的邀请码）';
+  end if;
+
   if length(v_norm) < 4 or length(v_norm) > 32 then
-    raise exception '邀请码长度需为 4–32 位字母或数字' using errcode = 'P0001';
+    raise exception '邀请码长度需为 4–32 位字母或数字%', v_hint using errcode = 'P0001';
   end if;
   if v_spots < 1 or v_spots > 30 then
-    raise exception '剩余次数必须是 1–30 的整数' using errcode = 'P0001';
+    raise exception '剩余次数必须是 1–30 的整数%', v_hint using errcode = 'P0001';
   end if;
 
   select count(*) into v_mine
     from public.invite_codes
    where creator_hash = v_visitor and status = 'available';
   if v_mine >= 1 then
-    raise exception '同一个人最多保留 1 个可用邀请码' using errcode = 'P0001';
+    raise exception '你放回的码还在池子里没人接走，先等它被接走（或等它下架）再放新的%', v_hint
+      using errcode = 'P0001';
   end if;
 
   select count(*) into v_recent
     from public.publish_log
    where created_at >= now() - interval '10 minutes';
   if v_recent >= 30 then
-    raise exception '全站发布太频繁，请过几分钟再试' using errcode = 'P0001';
+    raise exception '全站发布太频繁，请过几分钟再试%', v_hint using errcode = 'P0001';
   end if;
 
+  -- 被下架/删除过的码不能拿来抵回填：它已经证明是无效码
+  if exists (select 1 from public.invite_codes
+              where code_norm = v_norm and status = 'expired') then
+    raise exception '这个邀请码之前已经被下架了（无效码），不能拿来抵回填，换一个能用的%', v_hint
+      using errcode = 'P0001';
+  end if;
   if exists (select 1 from public.invite_codes where code_norm = v_norm) then
-    raise exception '该邀请码已经在池里了' using errcode = 'P0001';
+    raise exception '该邀请码已经在池里了，换个没放过的%', v_hint using errcode = 'P0001';
   end if;
 
   select coalesce(max(queue_rank), 0) + 1 into v_rank from public.invite_codes;
