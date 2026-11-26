@@ -129,13 +129,17 @@ body {
   width: 92px;
   height: 92px;
   border-radius: 26px;
-  background: linear-gradient(160deg, #ffffff, #dfe9ff);
-  display: grid;
-  place-items: center;
-  font-size: 42px;
-  font-weight: 800;
-  color: var(--blue);
+  overflow: hidden;
+  background: linear-gradient(160deg, #cfe1ff, #a9c7ff);
   box-shadow: 0 14px 28px -16px rgba(47, 101, 227, .55), inset 0 0 0 1px rgba(255, 255, 255, .8);
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scale(1.18);
+  transform-origin: 50% 72%;
 }
 
 .brand-tag {
@@ -254,7 +258,7 @@ body {
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--surface);
-  min-width: 178px;
+  flex: 1 1 200px;
 }
 .metric-ico {
   width: 40px; height: 40px;
@@ -271,50 +275,6 @@ body {
 .metric-val { display: flex; align-items: baseline; gap: 3px; }
 .metric-val b { font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .metric-val small { font-size: 12px; color: var(--muted); }
-
-.quota {
-  flex: 1 1 200px;
-  min-width: 190px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 13px 18px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.quota-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.quota-top span { font-size: 12.5px; color: var(--muted); }
-.quota-top b { font-size: 17px; font-variant-numeric: tabular-nums; }
-.quota-bars { display: flex; gap: 6px; }
-.quota-bars i {
-  flex: 1 1 0;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--blue-soft);
-  position: relative;
-  overflow: hidden;
-}
-.quota-bars i.on::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--blue);
-  border-radius: 999px;
-}
-.quota-hint-btn {
-  align-self: flex-start;
-  appearance: none;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 11.5px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.quota-hint-btn:hover { color: var(--blue); border-color: var(--blue); }
 
 /* ------------------------------------------------------------ 卡片网格 */
 
@@ -623,7 +583,7 @@ input::placeholder { color: var(--muted-2); }
   .hero-card { padding: 20px 18px; }
   .avatar { width: 68px; height: 68px; border-radius: 20px; font-size: 30px; }
   .metrics { flex-direction: column; }
-  .metric, .quota { width: 100%; }
+  .metric { width: 100%; }
   .grid { grid-template-columns: 1fr; }
   .empty-art { display: none; }
   .share-form .field.narrow { width: 100%; }

@@ -313,16 +313,6 @@
     $("#statAvailable").textContent = state.stats.available ?? "—";
   }
 
-  function renderQuota() {
-    const q = state.quota || {};
-    const limit = q.limit || CFG.dailyReveals;
-    const left = Math.max(0, q.remaining == null ? limit : q.remaining);
-    $("#quotaText").textContent = left + " / " + limit;
-    const bars = [];
-    for (let i = 0; i < limit; i += 1) bars.push('<i class="' + (i < left ? "on" : "") + '"></i>');
-    $("#quotaBars").innerHTML = bars.join("");
-  }
-
   function renderEmpty(show) {
     $("#emptyCard").hidden = !show;
   }
@@ -375,7 +365,6 @@
 
   function renderAll() {
     renderStats();
-    renderQuota();
     renderGrid();
     renderHistory();
   }
@@ -431,11 +420,6 @@
     $("#shareJump").addEventListener("click", () => {
       $("#sharePanel").scrollIntoView({ behavior: "smooth", block: "center" });
       setTimeout(() => $("#codeInput").focus(), 320);
-    });
-
-    $("#quotaHintBtn").addEventListener("click", () => {
-      const q = state.quota || {};
-      toast("每人每天 " + (q.limit || CFG.dailyReveals) + " 次揭晓，" + (q.resetAt || "北京时间 00:00") + " 重置");
     });
 
     $("#refreshBtn").addEventListener("click", () => { toast("已刷新"); load(); });

@@ -6,7 +6,10 @@
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
 <link rel="stylesheet" href="styles.css" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%232f65e3'/%3E%3Ctext x='50' y='70' font-size='54' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E8%B1%86%3C/text%3E%3C/svg%3E" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
+<link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
+<meta name="theme-color" content="#dbe9ff" />
 </head>
 <body>
 <div class="bg-wash" aria-hidden="true"></div>
@@ -25,7 +28,7 @@
 <main class="wrap">
   <section class="hero-card">
     <div class="hero-top">
-      <div class="avatar">豆</div>
+      <div class="avatar"><img src="assets/xiaodou-avatar.png" alt="小豆头像" /></div>
       <div class="hero-id">
         <p class="brand-tag">社区 · 非官方</p>
         <h1>小豆邀请码</h1>
@@ -71,14 +74,6 @@
           <label>当前可揭晓</label>
           <div class="metric-val"><b id="statAvailable">—</b><small>个</small></div>
         </div>
-      </div>
-      <div class="quota">
-        <div class="quota-top">
-          <span>今日可揭晓</span>
-          <b id="quotaText">— / —</b>
-        </div>
-        <div class="quota-bars" id="quotaBars"></div>
-        <button class="quota-hint-btn" id="quotaHintBtn" type="button">额度说明</button>
       </div>
     </div>
 
