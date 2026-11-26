@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=6" />
+<link rel="stylesheet" href="styles.css?v=7" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -66,14 +66,15 @@
     <h1>管理后台</h1>
     <div>
       <a class="adm-back" href="./">← 返回首页</a>
-      <button class="adm-mini adm-refresh" id="logoutBtn" type="button" hidden>退出密钥</button>
+      <button class="adm-mini adm-refresh" id="passBtn" type="button" hidden>改密码</button>
+      <button class="adm-mini adm-refresh" id="logoutBtn" type="button" hidden>退出</button>
     </div>
   </div>
 
   <div class="adm-gate" id="gate">
-    <h2>先贴管理密钥</h2>
-    <p>密钥只存在这台电脑的 sessionStorage 里，关掉浏览器就没了。它和首页“管理入口”用的是同一个。</p>
-    <input id="keyInput" type="password" placeholder="粘贴管理员密钥" spellcheck="false" autocomplete="off" />
+    <h2>先输入管理密码</h2>
+    <p>密码只存在这台电脑的 sessionStorage 里，关掉浏览器就没了。首页页脚的“管理入口”也是进这里。</p>
+    <input id="keyInput" type="password" placeholder="输入管理员密码" spellcheck="false" autocomplete="off" />
     <button class="primary-btn" id="enterBtn" type="button">进入</button>
     <p class="adm-err" id="gateErr" hidden></p>
   </div>
@@ -226,6 +227,7 @@
     $("#panel").hidden = false;
     $("#gate").hidden = true;
     $("#logoutBtn").hidden = false;
+    $("#passBtn").hidden = false;
     load().catch(onFail);
   }
 
@@ -239,6 +241,7 @@
       sessionStorage.removeItem(KEY_STORE);
       listKey = "";
       $("#logoutBtn").hidden = true;
+      $("#passBtn").hidden = true;
     }
   }
 
@@ -259,12 +262,27 @@
     if (e.key === "Enter") $("#enterBtn").click();
   });
 
+  $("#passBtn").addEventListener("click", async () => {
+    const next = (prompt("设置新的管理密码（至少 8 位，记牢）") || "").trim();
+    if (!next) return;
+    if (next.length < 8) { toast("新密码至少 8 位"); return; }
+    try {
+      await rpc("admin_set_key", { p_key: listKey, p_new_key: next });
+      listKey = next;
+      sessionStorage.setItem(KEY_STORE, next);
+      toast("密码已更新，下次用新密码进来");
+    } catch (err) {
+      toast(err.message || "改密码失败");
+    }
+  });
+
   $("#logoutBtn").addEventListener("click", () => {
     sessionStorage.removeItem(KEY_STORE);
     listKey = "";
     $("#panel").hidden = true;
     $("#gate").hidden = false;
     $("#logoutBtn").hidden = true;
+    $("#passBtn").hidden = true;
   });
 
   $("#reloadBtn").addEventListener("click", () => { toast("已重载"); load().catch(onFail); });

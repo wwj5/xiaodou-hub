@@ -668,6 +668,25 @@ begin
 end;
 $$;
 
+create or replace function public.admin_set_key(p_key text, p_new_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  if p_new_key is null or length(trim(p_new_key)) < 8 then
+    raise exception '新密码至少 8 位' using errcode = 'P0001';
+  end if;
+  update public.app_settings
+     set admin_token_hash = encode(sha256(convert_to(trim(p_new_key), 'UTF8')), 'hex'),
+         updated_at = now()
+   where id = true;
+  return json_build_object('ok', true);
+end;
+$$;
+
 -- ---------------------------------------------------------------- 函数授权
 
 revoke all on function public.hub_stats() from public;
@@ -682,6 +701,7 @@ revoke all on function public.admin_reseed(text) from public;
 revoke all on function public.admin_list(text, text, integer) from public;
 revoke all on function public.admin_delete_code(uuid, text) from public;
 revoke all on function public.admin_resolve_report(bigint, text, boolean) from public;
+revoke all on function public.admin_set_key(text, text) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -695,3 +715,4 @@ grant execute on function public.admin_reseed(text) to anon, authenticated;
 grant execute on function public.admin_list(text, text, integer) to anon, authenticated;
 grant execute on function public.admin_delete_code(uuid, text) to anon, authenticated;
 grant execute on function public.admin_resolve_report(bigint, text, boolean) to anon, authenticated;
+grant execute on function public.admin_set_key(text, text) to anon, authenticated;
