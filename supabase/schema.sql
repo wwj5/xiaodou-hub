@@ -78,6 +78,26 @@ alter table public.app_settings
 alter table public.app_settings
   add column if not exists wm_opacity numeric not null default 0.11;
 
+-- 出码方式：auto = 点一下就自动揭晓；manual = 填申请，站长人工把码发过去（防跑路）
+alter table public.app_settings
+  add column if not exists reveal_mode text not null default 'manual';
+do $$ begin
+  alter table public.app_settings add constraint ck_reveal_mode check (reveal_mode in ('auto', 'manual'));
+exception when duplicate_object then null; end $$;
+
+-- 发码申请：想拿码的人先留联系方式，站长核对欠账后手动发
+create table if not exists public.reveal_requests (
+  id           bigserial primary key,
+  visitor_hash text not null,
+  contact      text not null,
+  note         text,
+  status       text not null default 'open' check (status in ('open', 'sent', 'rejected')),
+  code_id      uuid,
+  handled_at   timestamptz,
+  created_at   timestamptz not null default now()
+);
+create index if not exists ix_reveal_requests_status on public.reveal_requests (status, created_at);
+
 -- 拉黑名单：只按设备指纹，不记 IP、不记个人身份信息
 -- kind: manual = 管理员手动限制；auto = 超时未回填自动限制（回填后会自动解除）
 create table if not exists public.visitor_blocks (
@@ -108,6 +128,7 @@ alter table public.feedback      enable row level security;
 alter table public.app_settings  enable row level security;
 alter table public.visitor_blocks enable row level security;
 alter table public.reject_log    enable row level security;
+alter table public.reveal_requests enable row level security;
 
 revoke all on public.invite_codes  from anon, authenticated;
 revoke all on public.reports       from anon, authenticated;
@@ -116,6 +137,7 @@ revoke all on public.feedback      from anon, authenticated;
 revoke all on public.app_settings  from anon, authenticated;
 revoke all on public.visitor_blocks from anon, authenticated;
 revoke all on public.reject_log    from anon, authenticated;
+revoke all on public.reveal_requests from anon, authenticated;
 
 -- ---------------------------------------------------------------- 内部小工具
 
@@ -169,6 +191,17 @@ security definer
 set search_path = public, pg_temp
 as $$
   select coalesce((select autoblock_minutes from public.app_settings where id = true), 5);
+$$;
+
+-- 当前出码方式：auto = 点一下自动揭晓；manual = 填申请、站长人工发码（默认，防跑路）
+create or replace function public.hub_reveal_mode()
+returns text
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce((select reveal_mode from public.app_settings where id = true), 'manual');
 $$;
 
 -- 超时未回填 → 自动把该设备指纹写进限制名单；回填后由 publish_code 自动解除
@@ -257,6 +290,8 @@ as $$
     ),
     -- 超时未回填的宽限分钟（前端用来提示"多久内必须放回"）
     'graceMinutes',   public.hub_grace_minutes(),
+    -- 出码方式：auto 自动揭晓 / manual 申请后人工发码
+    'revealMode',     public.hub_reveal_mode(),
     -- 页面水印（后台可改，前端现场画）
     'wm', json_build_object(
       'line1',   coalesce((select wm_line1   from public.app_settings where id = true), '自觉回填邀请码'),
@@ -416,7 +451,14 @@ begin
       'blocked', (v_taken >= v_return + 1) or exists (
         select 1 from public.visitor_blocks b where b.visitor_hash = v_hash
       ),
-      'graceMinutes', public.hub_grace_minutes()
+      'graceMinutes', public.hub_grace_minutes(),
+      -- 这台设备最近一次发码申请（前端据此把按钮改成「已申请，等发码」）
+      'request', (
+        select json_build_object('status', r.status, 'createdAt', r.created_at)
+          from public.reveal_requests r
+         where r.visitor_hash = v_hash
+         order by r.created_at desc limit 1
+      )
     )
   );
 end;
@@ -556,6 +598,11 @@ declare
   v_hourly   integer;
   v_remaining integer;
 begin
+  -- 出码方式改成人工发码时，自动揭晓一律关掉（防止有人绕过页面直接抓接口）
+  if public.hub_reveal_mode() = 'manual' then
+    raise exception '现在不是自动出码：点卡片上的「申请一个码」，站长核对后会私发给你' using errcode = 'P0001';
+  end if;
+
   -- 先把超时未回填的设备自动限制掉（回填后会自动解除）
   perform public.hub_autoblock(v_visitor);
 
@@ -1209,6 +1256,7 @@ begin
   perform public.hub_require_admin(p_key);
   return json_build_object(
     'graceMinutes', public.hub_grace_minutes(),
+    'revealMode',   public.hub_reveal_mode(),
     'wm', (
       select json_build_object(
         'line1', wm_line1, 'line2', wm_line2, 'opacity', wm_opacity
@@ -1366,3 +1414,227 @@ grant execute on function public.admin_purge_bad(text, boolean) to anon, authent
 
 
 
+
+-- ---------------------------------------------------------------- RPC：申请制发码（防跑路）
+
+-- 当事人提交申请：留个能联系上的方式，站长核对后再私发码
+create or replace function public.request_code(
+  p_token   text,
+  p_contact text default '',
+  p_note    text default ''
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hash    text := public.hub_hash(p_token);
+  v_contact text := left(btrim(coalesce(p_contact, '')), 80);
+  v_note    text := left(btrim(coalesce(p_note, '')), 200);
+  v_taken   integer;
+  v_ret     integer;
+  v_today   integer;
+  v_open    bigint;
+  v_id      bigint;
+begin
+  if length(v_contact) < 4 then
+    return json_build_object('ok', false, 'error', '留个能联系上的方式吧（微信 / QQ / 邮箱都行），不然码发不到你手上');
+  end if;
+
+  if exists (select 1 from public.visitor_blocks where visitor_hash = v_hash) then
+    return json_build_object('ok', false, 'error', '这台设备现在被限制着：先把欠的邀请码放回来，再来申请');
+  end if;
+
+  select count(*) into v_taken
+    from public.reports r
+    join public.invite_codes c on c.id = r.code_id
+   where r.visitor_hash = v_hash and r.action = 'reveal' and c.status <> 'expired';
+  select count(*) into v_ret
+    from public.invite_codes where creator_hash = v_hash and status <> 'expired';
+  if v_taken > v_ret then
+    return json_build_object('ok', false, 'error', '你手里还欠着 ' || (v_taken - v_ret) || ' 个没还：先把邀请码放回来，再来申请');
+  end if;
+
+  select id into v_open from public.reveal_requests
+   where visitor_hash = v_hash and status = 'open' limit 1;
+  if v_open is not null then
+    return json_build_object('ok', false, 'error', '你上次的申请还在等站长处理，别重复交');
+  end if;
+
+  select count(*) into v_today from public.reveal_requests
+   where visitor_hash = v_hash
+     and ((created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today();
+  if v_today >= 2 then
+    return json_build_object('ok', false, 'error', '今天已经申请过 ' || v_today || ' 次了，明天再来');
+  end if;
+
+  insert into public.reveal_requests (visitor_hash, contact, note)
+  values (v_hash, v_contact, v_note)
+  returning id into v_id;
+
+  return json_build_object('ok', true, 'id', v_id,
+    'position', (select count(*) from public.reveal_requests where status = 'open' and created_at < now()));
+end;
+$$;
+
+-- 后台：待发码申请列表（带这人揭了几、回了几、欠几）
+create or replace function public.admin_requests(p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    with rq as (
+      select r.id, r.visitor_hash as vh, r.contact, r.note, r.status, r.created_at
+        from public.reveal_requests r
+       where r.status = 'open'
+       order by r.created_at
+       limit 200
+    ),
+    rd as (
+      select rq.*,
+             (select count(*) from public.reports x
+               join public.invite_codes c on c.id = x.code_id
+              where x.visitor_hash = rq.vh and x.action = 'reveal' and c.status <> 'expired') as taken,
+             (select count(*) from public.invite_codes c2
+              where c2.creator_hash = rq.vh and c2.status <> 'expired') as returned,
+             exists (select 1 from public.visitor_blocks b where b.visitor_hash = rq.vh) as blocked
+        from rq
+    )
+    select json_build_object(
+      'ok', true,
+      'openCount', (select count(*) from rd),
+      'available', (select count(*) from public.invite_codes where status = 'available'),
+      'rows', (select coalesce(json_agg(json_build_object(
+                 'id', rd.id,
+                 'short', left(rd.vh, 8),
+                 'contact', rd.contact,
+                 'note', rd.note,
+                 'createdAt', rd.created_at,
+                 'taken', rd.taken,
+                 'returned', rd.returned,
+                 'pending', greatest(rd.taken - rd.returned, 0),
+                 'blocked', rd.blocked
+               ) order by rd.created_at), '[]'::json) from rd)
+    )
+  );
+end;
+$$;
+
+-- 后台：给某条申请发一个码（默认取池子里顺位最前的那条），返回明文给管理员自己去发
+create or replace function public.admin_send_code(
+  p_key     text,
+  p_id      bigint,
+  p_code_id uuid default null
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_req  public.reveal_requests;
+  v_row  public.invite_codes;
+begin
+  perform public.hub_require_admin(p_key);
+
+  select * into v_req from public.reveal_requests where id = p_id for update;
+  if not found then
+    return json_build_object('ok', false, 'error', '这条申请不存在');
+  end if;
+  if v_req.status <> 'open' then
+    return json_build_object('ok', false, 'error', '这条申请已经处理过了');
+  end if;
+
+  if p_code_id is not null then
+    select * into v_row from public.invite_codes where id = p_code_id for update;
+  else
+    select * into v_row from public.invite_codes
+     where status = 'available' order by queue_rank, created_at limit 1 for update;
+  end if;
+
+  if not found or v_row.status <> 'available' then
+    return json_build_object('ok', false, 'error', '池子里没有可发的码，先让人放一个进来');
+  end if;
+
+  perform pg_advisory_xact_lock(778900);
+
+  update public.invite_codes
+     set status = 'used', remaining_spots = 0,
+         claimed_count = claimed_count + 1, updated_at = now()
+   where id = v_row.id;
+
+  insert into public.reports (code_id, action, visitor_hash)
+  values (v_row.id, 'reveal', v_req.visitor_hash)
+  on conflict (code_id, visitor_hash, action) do nothing;
+
+  update public.reveal_requests
+     set status = 'sent', code_id = v_row.id, handled_at = now()
+   where id = p_id;
+
+  return json_build_object('ok', true, 'code', v_row.code, 'to', left(v_req.visitor_hash, 8),
+                           'contact', v_req.contact, 'requestId', p_id);
+end;
+$$;
+
+-- 后台：拒绝 / 关闭一条申请
+create or replace function public.admin_resolve_request(
+  p_key  text,
+  p_id   bigint,
+  p_note text default ''
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+
+  update public.reveal_requests
+     set status = 'rejected', handled_at = now(),
+         note = left(btrim(coalesce(note, '') || case when coalesce(p_note, '') = '' then '' else '｜' || left(p_note, 120) end), 200)
+   where id = p_id and status = 'open';
+
+  if not found then
+    return json_build_object('ok', false, 'error', '这条申请不存在或已经处理过');
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+-- 后台：切回自动揭晓 / 继续人工发码
+create or replace function public.admin_set_reveal_mode(p_key text, p_mode text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v text := lower(btrim(coalesce(p_mode, '')));
+begin
+  perform public.hub_require_admin(p_key);
+  if v not in ('auto', 'manual') then
+    return json_build_object('ok', false, 'error', '只认 auto 或 manual');
+  end if;
+  update public.app_settings set reveal_mode = v, updated_at = now() where id = true;
+  return json_build_object('ok', true, 'mode', v);
+end;
+$$;
+
+revoke all on function public.request_code(text, text, text) from public;
+revoke all on function public.admin_requests(text) from public;
+revoke all on function public.admin_send_code(text, bigint, uuid) from public;
+revoke all on function public.admin_resolve_request(text, bigint, text) from public;
+revoke all on function public.admin_set_reveal_mode(text, text) from public;
+
+grant execute on function public.request_code(text, text, text) to anon, authenticated;
+grant execute on function public.admin_requests(text) to anon, authenticated;
+grant execute on function public.admin_send_code(text, bigint, uuid) to anon, authenticated;
+grant execute on function public.admin_resolve_request(text, bigint, text) to anon, authenticated;
+grant execute on function public.admin_set_reveal_mode(text, text) to anon, authenticated;

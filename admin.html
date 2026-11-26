@@ -148,6 +148,32 @@
     <div class="adm-empty" id="codeEmpty" hidden>这个筛选下没有码。</div>
 
     <div class="adm-sec">
+      <h2>发码申请 <span id="reqCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <p class="hint">
+        现在出的不是「点一下自动给码」，而是想拿码的人先留个能联系上的方式，你核对完再私发。
+        点「发码」会自动从池子里取顺位最前的一个码（标成已用、记进领取记录），然后弹出明文给你复制去发。
+        池子里没码就发不出去，先让人放一个进来。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <label class="adm-check adm-grace">
+          出码方式
+          <span id="modeNow" class="adm-tag available">人工发码</span>
+          <button class="adm-mini" id="modeToggle" type="button">切回自动揭晓</button>
+        </label>
+        <div class="adm-right">
+          <button class="adm-mini" id="reqReload" type="button">刷新申请</button>
+        </div>
+      </div>
+      <table class="adm-table" id="reqTable">
+        <thead>
+          <tr><th>#</th><th>时间</th><th>设备</th><th>揭 / 回 / 欠</th><th>联系方式</th><th>留言</th><th>操作</th></tr>
+        </thead>
+        <tbody id="reqBody"></tbody>
+      </table>
+      <div class="adm-empty" id="reqEmpty" hidden>现在没人申请，池子安静着。</div>
+    </div>
+
+    <div class="adm-sec">
       <h2>待处理举报 <span id="reportCount" style="color:var(--muted);font-weight:400"></span></h2>
       <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
       <div id="reportList"></div>
@@ -367,6 +393,91 @@
 
   const REASON = { invalid: "码无效", used: "已被别人用掉", wrong_info: "信息不对", other: "其他" };
 
+  /* ---------------- 发码申请 ---------------- */
+  let reqRows = [];
+
+  async function loadRequests() {
+    const data = await rpc("admin_requests", { p_key: listKey });
+    reqRows = data.rows || [];
+    $("#reqCount").textContent = reqRows.length ? "（" + reqRows.length + " 条待发码，" + (data.available || 0) + " 个码可用）" : "";
+    $("#reqEmpty").hidden = reqRows.length > 0;
+    $("#reqTable").hidden = reqRows.length === 0;
+    $("#reqBody").innerHTML = reqRows.map((r, i) => (
+      "<tr>" +
+        "<td>" + (i + 1) + "</td>" +
+        "<td>" + fmtTime(r.createdAt) + "</td>" +
+        '<td><code title="' + esc(r.short) + '">' + esc(r.short) + "…</code>" +
+          (r.blocked ? ' <span class="adm-tag expired">受限</span>' : "") + "</td>" +
+        "<td>" + r.taken + " / " + r.returned + " / " +
+          (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
+        "<td>" + esc(r.contact) + "</td>" +
+        '<td style="color:var(--muted);font-size:12px">' + (r.note ? esc(r.note) : "—") + "</td>" +
+        '<td><div class="adm-act">' +
+          '<button class="adm-mini" data-req="send" data-id="' + r.id + '">发码</button>' +
+          '<button class="adm-mini danger" data-req="reject" data-id="' + r.id + '">拒绝</button>' +
+        "</div></td></tr>"
+    )).join("");
+  }
+
+  $("#reqReload").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await loadRequests(); toast("申请已刷新"); } catch (err) { onFail(err); } finally { btn.disabled = false; }
+  });
+
+  $("#reqBody").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-req]");
+    if (!btn || btn.disabled) return;
+    const row = reqRows.find((r) => String(r.id) === btn.dataset.id);
+    if (!row) return;
+    const who = row.contact + "（设备 " + row.short + "…）";
+
+    if (btn.dataset.req === "reject") {
+      askConfirm("拒掉这条申请", "申请人：" + who + "。拒掉之后他今天还能再申请，只是这条不再等你处理。", "拒绝", async () => {
+        const res = await rpc("admin_resolve_request", { p_key: listKey, p_id: Number(row.id), p_note: "" });
+        if (res && res.ok === false) throw new Error(res.error || "拒绝失败");
+        toast("已拒绝");
+        await loadRequests();
+      });
+      return;
+    }
+
+    askConfirm("给他发一个码", "申请人：" + who + "。会从池子里取顺位最前的一个码，标成已用并记进领取记录，然后把明文弹给你复制。", "发码", async () => {
+      const res = await rpc("admin_send_code", { p_key: listKey, p_id: Number(row.id), p_code_id: null });
+      if (res && res.ok === false) throw new Error(res.error || "发码失败");
+      try { await navigator.clipboard.writeText(res.code); } catch (err2) { /* 复制失败也无所谓 */ }
+      toast("码 " + res.code + " 已复制 → 发给 " + (res.contact || row.contact));
+      await loadRequests();
+      await load();
+    });
+  });
+
+  /* ---------------- 出码方式切换 ---------------- */
+  function paintMode(mode) {
+    const auto = mode === "auto";
+    $("#modeNow").textContent = auto ? "自动揭晓" : "人工发码";
+    $("#modeNow").className = "adm-tag " + (auto ? "used" : "available");
+    $("#modeToggle").textContent = auto ? "改成人工发码" : "切回自动揭晓";
+    $("#modeToggle").dataset.next = auto ? "manual" : "auto";
+  }
+
+  $("#modeToggle").addEventListener("click", () => {
+    const next = $("#modeToggle").dataset.next || "auto";
+    askConfirm(
+      next === "auto" ? "切回自动揭晓？" : "改成人工发码？",
+      next === "auto"
+        ? "切回自动：卡片上的按钮会恢复成「点击揭晓」，谁点谁直接拿码——拿完就跑的人会重新出现。"
+        : "改成人工发码：卡片按钮变成「申请这个码」，拿码的人必须留联系方式，由你核对后私发。",
+      next === "auto" ? "切回自动" : "改成人工",
+      async () => {
+        const res = await rpc("admin_set_reveal_mode", { p_key: listKey, p_mode: next });
+        if (res && res.ok === false) throw new Error(res.error || "切换失败");
+        paintMode(next);
+        toast(next === "auto" ? "已切回自动揭晓" : "已改成人工发码");
+      }
+    );
+  });
+
   function renderReports(reports) {
     $("#reportEmpty").hidden = reports.length > 0;
     $("#reportList").innerHTML = reports.map((r) => (
@@ -393,6 +504,7 @@
     renderReports(data.reports || []);
     await loadLedger();
     await loadRejects();
+    await loadRequests();
     return data;
   }
 
@@ -405,6 +517,7 @@
       const s = await rpc("admin_settings", { p_key: listKey });
       if (!s) return;
       $("#graceInput").value = s.graceMinutes != null ? s.graceMinutes : 5;
+      paintMode(s.revealMode || "manual");
       if (s.wm) {
         $("#wmLine1").value = s.wm.line1 || "";
         $("#wmLine2").value = s.wm.line2 || "";

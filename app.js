@@ -427,6 +427,14 @@
         ? rpc("reveal_code", { p_id: id, p_token: visitorToken() })
         : demo.reveal(id, visitorToken());
     },
+    async request(contact, note) {
+      if (MODE !== "remote") throw fail("演示模式没有发码人，配上 Supabase 才能申请");
+      const res = await rpc("request_code", {
+        p_token: visitorToken(), p_contact: contact, p_note: note || "",
+      });
+      if (res && res.ok === false) throw fail(res.error || "申请没交上，稍后再试");
+      return res;
+    },
     feedback(id, reason, note) {
       return MODE === "remote"
         ? rpc("submit_feedback", { p_id: id, p_reason: reason, p_note: note, p_token: visitorToken() })
@@ -442,6 +450,7 @@
     stats: { issued: 0, available: 0, revealed: 0, revealedCount: 0 },
     quota: { remaining: CFG.dailyReveals, limit: CFG.dailyReveals, resetAt: "北京时间 00:00" },
     relay: null,
+    request: null,
     busy: false,
     feedbackTarget: null,
   };
@@ -539,6 +548,8 @@
     if (!state.avail.length) { list.innerHTML = ""; return; }
 
     const blocked = !!(state.relay && state.relay.blocked);
+    const manual = !!(state.stats && state.stats.revealMode === "manual");
+    const openReq = !!(state.request && state.request.status === "open" || state.relay && state.relay.request && state.relay.request.status === "open");
     list.innerHTML = state.avail.map((c, i) => {
       const got = mine.get(c.id);
       const cls = (got ? " mine" : "") + (c.fresh ? " fresh" : "");
@@ -549,7 +560,11 @@
         ? '<button class="mini-btn solid" data-act="copy" data-id="' + esc(c.id) + '">复制</button>'
         : (blocked
           ? '<button class="mini-btn ghost" type="button" disabled title="先把自己的邀请码放回来">先回填自己的码</button>'
-          : '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">点击揭晓</button>');
+          : (manual
+            ? (openReq
+              ? '<button class="mini-btn ghost" type="button" disabled title="等站长发码">已申请，等发码</button>'
+              : '<button class="mini-btn solid" data-act="request" data-id="' + esc(c.id) + '">申请这个码</button>')
+            : '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">点击揭晓</button>'));
       return (
         '<article class="code-card' + cls + '">' +
           '<div class="cc-top"><span class="cc-rank">#' + (i + 1) + "</span>" + tag + "</div>" +
@@ -615,6 +630,7 @@
       state.stats = availRes.stats || state.stats;
       if (availRes.quota) state.quota = availRes.quota;
       if (availRes.relay) state.relay = availRes.relay;
+      state.request = (availRes.relay && availRes.relay.request) || null;
       if (MODE === "remote") localStorage.removeItem(RELAY_KEY);
       renderAll();
     } catch (e) {
@@ -656,8 +672,53 @@
     }
   }
 
-  function openShare() {
-    $("#relayModal").hidden = true;
+  /* ---------- 申请一个码（人工发码模式） ---------- */
+
+  function openRequest() {
+    const box = $("#requestModal");
+    if (!box) return;
+    $("#reqError").hidden = true;
+    box.hidden = false;
+    setTimeout(() => $("#reqContact").focus(), 120);
+  }
+
+  function closeRequest() {
+    const box = $("#requestModal");
+    if (box) box.hidden = true;
+  }
+
+  async function submitRequest() {
+    const err = $("#reqError");
+    err.hidden = true;
+    const contact = ($("#reqContact").value || "").trim();
+    const note = ($("#reqNote").value || "").trim();
+    if (contact.length < 4) {
+      err.textContent = "留个能联系上的方式（微信 / QQ / 邮箱都行），不然码发不到你手上";
+      err.hidden = false;
+      return;
+    }
+    const btn = $("#reqSubmit");
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = "提交中…";
+    try {
+      const res = await api.request(contact, note);
+      closeRequest();
+      $("#reqContact").value = "";
+      $("#reqNote").value = "";
+      const ahead = Number(res && res.position);
+      toast("申请已交上" + (ahead > 0 ? "，前面还有 " + ahead + " 个人在排" : "") + "，站长发码后会联系你");
+      await load();
+    } catch (e) {
+      err.textContent = e.message;
+      err.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+
+  function openShare() {    $("#relayModal").hidden = true;
     $("#shareError").hidden = true;
     $("#shareModal").hidden = false;
     setTimeout(() => $("#codeInput").focus(), 120);
@@ -732,6 +793,10 @@
       if (!btn) return;
       const id = btn.dataset.id;
       if (btn.dataset.act === "reveal") return doReveal(id);
+      if (btn.dataset.act === "request") {
+        state.requestTarget = id;
+        return openRequest();
+      }
       if (btn.dataset.act === "copy") {
         const got = mine.get(id);
         const card = state.avail.find((c) => String(c.id) === id) ||
@@ -753,6 +818,19 @@
     };
     $("#list").addEventListener("click", onCardAction);
     $("#historyList").addEventListener("click", onCardAction);
+
+    // 申请弹窗
+    if ($("#requestModal")) {
+      $("#requestClose").addEventListener("click", closeRequest);
+      $("#requestCancel").addEventListener("click", closeRequest);
+      $("#reqSubmit").addEventListener("click", submitRequest);
+      $("#requestModal").addEventListener("click", (e) => {
+        if (e.target.id === "requestModal") closeRequest();
+      });
+      $("#reqContact").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); submitRequest(); }
+      });
+    }
 
     // 反馈
     $("#feedbackClose").addEventListener("click", () => ($("#feedbackModal").hidden = true));

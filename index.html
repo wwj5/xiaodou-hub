@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
-<meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=36" />
+<meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，申请后由站长私发码。非官方项目。" />
+<link rel="stylesheet" href="styles.css?v=37" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -13,7 +13,7 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="小豆邀请码互助站" />
 <meta property="og:title" content="小豆邀请码互助站 · 接力共享" />
-<meta property="og:description" content="成员把自己的小豆邀请码放进池子，别人揭晓才看得到明文。免费、纯接力，不收钱也不卖码。" />
+<meta property="og:description" content="成员把自己的小豆邀请码放进池子，别人申请后由站长私发明文。免费、纯接力，不收钱也不卖码。" />
 <meta property="og:url" content="https://wwj5.github.io/xiaodou-hub/" />
 <meta property="og:image" content="https://wwj5.github.io/xiaodou-hub/assets/share-cover-wide.jpg" />
 <meta property="og:image:width" content="1200" />
@@ -47,7 +47,7 @@
       <div class="hero-id">
         <p class="brand-tag">社区 · 非官方</p>
         <h1>小豆邀请码</h1>
-        <p class="hero-sub">成员共享，揭晓才出码 · 不用注册</p>
+        <p class="hero-sub">成员共享 · 填申请，站长私发码</p>
       </div>
     </div>
 
@@ -75,7 +75,7 @@
     <div class="sec-head">
       <div>
         <h2>社区共享的邀请码</h2>
-        <p class="sec-sub">揭晓后自动标记为已领取，请到小豆官方页面兑换。<span id="unreturnedNote" hidden></span></p>
+        <p class="sec-sub">码不是自动弹的：站长核对后私发给你，拿到请到小豆官方页面兑换。<span id="unreturnedNote" hidden></span></p>
       </div>
       <button class="primary-btn" id="shareJump" type="button">
         <span class="plus">＋</span> 分享邀请码
@@ -93,7 +93,7 @@
       <div class="metric green">
         <div class="metric-ico">✔</div>
         <div>
-          <label>当前可揭晓</label>
+          <label>池里还有码</label>
           <div class="metric-val"><b id="statAvailable">—</b><small>个</small></div>
         </div>
       </div>
@@ -124,7 +124,7 @@
     <div class="history">
       <div class="history-head">
         <h3>领取记录</h3>
-        <span class="history-note" id="historyNote">最近被揭晓的码</span>
+        <span class="history-note" id="historyNote">最近被发出去的码</span>
       </div>
       <div class="history-list" id="historyList"></div>
     </div>
@@ -132,7 +132,7 @@
 
   <section class="rules" id="rules">
     <h2>如何获取并分享邀请码</h2>
-    <p class="rules-intro">先从池子里揭晓一个码用上，等自己的邀请码出来，再放回一个。就这么接力，池子才是活的。</p>
+    <p class="rules-intro">先从池子申请一个码，等自己的邀请码出来，再放回一个。就这么接力，池子才是活的。</p>
     <button class="primary-btn rules-open" id="howOpen" type="button"><span class="plus">＋</span> 看完整说明（7 步 + 免责）</button>
   </section>
 
@@ -160,7 +160,7 @@
     </div>
     <p class="modal-note">这个站不收钱、不卖码，也不带货。码全靠成员一个接一个放回来，靠的就是诚信。</p>
     <div class="notice-body">
-      <p>你从池子里揭晓一个码，等自己的邀请码出来，也放一个回来。一个码只放给一个人，你揭到就是你的，别人再点就没有了。</p>
+      <p>你从池子申请一个码，等自己的邀请码出来，也放一个回来。一个码只发一个人，发到你手上就是你的，别人再申请就没有了。</p>
       <p>之所以较真这一件事，是不想让任何人为了进小豆去花钱买码。你放回来的这一个，就是下一个陌生人免费进门的机会；大家都不放，池子空了，后面的人就真的没得用。</p>
     </div>
     <div class="notice-hard">
@@ -186,13 +186,13 @@
       <h3>如何获取并分享邀请码</h3>
       <button class="icon-btn" id="howClose" type="button" aria-label="关闭">×</button>
     </div>
-    <p class="modal-note">先从池子里揭晓一个码用上，等自己的邀请码出来，再放回一个。就这么接力，池子才是活的。</p>
+    <p class="modal-note">先从池子申请一个码，等自己的邀请码出来，再放回一个。就这么接力，池子才是活的。</p>
 
     <div class="how-cols">
       <div class="rules-block">
         <h3><em>1</em>先拿一个（免费，不用注册）</h3>
         <div class="rules-steps">
-          <div class="rd"><span>1</span><div><b>点「揭晓」</b><p>列表只显示遮罩，点揭晓才出明文；一个码只给一个人。</p></div></div>
+          <div class="rd"><span>1</span><div><b>点「申请这个码」</b><p>列表只显示遮罩，填个能联系上的方式，站长核对后把码私发给你；一个码只给一个人。</p></div></div>
           <div class="rd"><span>2</span><div><b>复制明文</b><p>用复制按钮存下来，别带空格或换行。</p></div></div>
           <div class="rd"><span>3</span><div><b>去小豆 App 填</b><p>应用商店搜「小豆」下载，登录时填这个码，验证通过就能用。</p></div></div>
         </div>
@@ -211,7 +211,7 @@
 
     <div class="rules-note">
       <p><b>关于本站：</b>社区互助项目，与小豆官方没有隶属关系、也没有获得授权。码由成员自行分享，有效性请自行判断，别转卖、别大量转载。</p>
-      <p><b>关于接力：</b>第一个码免费接；接过 1 个之后再接，必须先放回 1 个自己的码。拿到码 5 分钟内没放回来的，这台设备会被自动限制揭晓，放回后立即解除；被管理员认定长期欠码的，也会被限制，直到还上为止。</p>
+      <p><b>关于接力：</b>第一个码免费接；接过 1 个之后再接，必须先放回 1 个自己的码。欠着不还的，这台设备会被限制申请，还上之后自动解除；被管理员认定长期欠码的，会一直限制到还上为止。</p>
     </div>
 
     <div class="modal-actions">
@@ -239,6 +239,34 @@
         <button class="line-btn" id="shareCancel" type="button">取消</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal" id="requestModal" hidden>
+  <div class="modal-card compact">
+    <div class="modal-head">
+      <h3>申请一个码</h3>
+      <button class="icon-btn" id="requestClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-note">
+        码不是自动弹出来的：填个能联系上的方式，站长核对后把码私发给你。
+        接过码没还的，先把码放回来再来申请。
+      </p>
+      <div class="field">
+        <label for="reqContact">怎么联系你（必填）</label>
+        <input id="reqContact" placeholder="微信 / QQ / 邮箱，如 wuhao_2024" spellcheck="false" maxlength="80" />
+      </div>
+      <div class="field">
+        <label for="reqNote">想说的话（可不填）</label>
+        <input id="reqNote" placeholder="比如：学生，拿到码会马上把自己的放回来" maxlength="200" />
+      </div>
+      <p class="form-error" id="reqError" hidden></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="reqSubmit" type="button">提交申请</button>
+        <button class="line-btn" id="requestCancel" type="button">取消</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -290,7 +318,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>
 
