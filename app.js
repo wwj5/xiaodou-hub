@@ -694,6 +694,10 @@
 
   $("#noticeOk").addEventListener("click", closeNotice);
   $("#noticeClose").addEventListener("click", closeNotice);
+  $("#noticeGo").addEventListener("click", () => {
+    closeNotice();
+    openShare();
+  });
   $("#noticeModal").addEventListener("click", (e) => {
     if (e.target.id === "noticeModal") closeNotice();
   });

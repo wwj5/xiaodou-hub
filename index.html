@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=16" />
+<link rel="stylesheet" href="styles.css?v=17" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -163,21 +163,29 @@
 <div class="modal" id="noticeModal" hidden>
   <div class="modal-card compact">
     <div class="modal-head">
-      <h3>接力玩法，全靠自觉</h3>
+      <h3>接力说明（公告）</h3>
       <button class="icon-btn" id="noticeClose" type="button" aria-label="关闭">×</button>
     </div>
-    <p class="modal-note">这是一个纯接力的邀请码池：码都是成员自己放回来的，不收钱，也不卖码。</p>
+    <p class="modal-note">这是个纯接力的邀请码池：码都是成员自己放回来的，不收钱，也不卖码。</p>
     <ul class="notice-list">
       <li><b>揭晓是独家的</b><span>一个码只放给一个人，你揭到就是你的，别人再点就没有了。</span></li>
       <li><b>回填全靠自觉</b><span>注册完请把自己的邀请码放回来。没有强制、也没人催，系统最多拦你揭下一个；真正让池子里有码的，是每个人自己放回来。</span></li>
       <li><b>不回填的后果</b><span>池子会空。下一个人点开，只有一句“暂时没有可领取的邀请码”。</span></li>
     </ul>
+    <div class="notice-how">
+      <b>怎么回填（4 步）</b>
+      <span>1. 打开小豆 App，点底部最右侧的人形图标进入个人页</span>
+      <span>2. 点右上角齿轮，找到「邀请好友体验小豆」</span>
+      <span>3. 复制邀请码或官方邀请链接</span>
+      <span>4. 回到本站点，点「分享邀请码」，粘进去提交</span>
+    </div>
     <label class="notice-check">
       <input id="noticeToday" type="checkbox" />
       <span>今天不再显示这个公告</span>
     </label>
     <div class="modal-actions">
-      <button class="primary-btn" id="noticeOk" type="button">知道了</button>
+      <button class="primary-btn" id="noticeGo" type="button">去回填邀请码</button>
+      <button class="line-btn" id="noticeOk" type="button">知道了</button>
     </div>
   </div>
 </div>
@@ -251,9 +259,10 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
+
 
 
 

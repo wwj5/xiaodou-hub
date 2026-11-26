@@ -638,6 +638,13 @@ input::placeholder { color: var(--muted-2); }
 .notice-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted);
                 cursor: pointer; user-select: none; }
 .notice-check input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
+.notice-how { margin: 2px 0 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--blue-soft); }
+.notice-how b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 8px; }
+.notice-how span { display: block; font-size: 12.5px; color: #3c4a63; line-height: 1.7; }
+@media (prefers-color-scheme: dark) {
+  .notice-how { background: #18233a; }
+  .notice-how span { color: var(--muted); }
+}
 
 .icon-btn {
   appearance: none; border: 0; background: transparent;
