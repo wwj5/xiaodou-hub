@@ -1,5 +1,7 @@
 # 小豆邀请码互助站（揭晓制）
 
+![小豆邀请码互助站](assets/share-cover-wide.jpg)
+
 <p>
   <a href="https://github.com/wwj5/xiaodou-hub/actions/workflows/pages.yml"><img alt="部署" src="https://github.com/wwj5/xiaodou-hub/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://wwj5.github.io/xiaodou-hub/"><img alt="站点" src="https://img.shields.io/badge/site-wwj5.github.io%2Fxiaodou--hub-2ea44f"></a>
@@ -8,8 +10,6 @@
   <img alt="前端" src="https://img.shields.io/badge/frontend-pure%20static%20%2B%20no%20build-1f6feb">
   <a href="https://github.com/wwj5/xiaodou-hub"><img alt="Stars" src="https://img.shields.io/github/stars/wwj5/xiaodou-hub?style=flat&logo=github&label=stars"></a>
 </p>
-
-![小豆邀请码互助站](assets/share-cover-wide.jpg)
 
 **站点：https://wwj5.github.io/xiaodou-hub/**
 
