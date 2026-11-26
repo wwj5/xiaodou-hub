@@ -519,7 +519,12 @@
       if (e.target.id === "shareModal") closeShare();
     });
 
-    $("#refreshBtn").addEventListener("click", () => { toast("已刷新"); load(); });
+    $("#refreshBtn").addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add("spin");
+      setTimeout(() => btn.classList.remove("spin"), 500);
+      load();
+    });
 
     $("#shareForm").addEventListener("submit", async (e) => {
       e.preventDefault();

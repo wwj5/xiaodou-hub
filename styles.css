@@ -91,7 +91,23 @@ body {
 }
 .logo-star { color: var(--blue); font-size: 17px; }
 
-.head-actions { display: flex; gap: 14px; }
+.head-actions { display: flex; gap: 14px; align-items: center; }
+.ghost-icon {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .75);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+.ghost-icon:hover { color: var(--blue); border-color: var(--blue); }
+.ghost-icon svg { transition: transform .45s ease; }
+.ghost-icon.spin svg { transform: rotate(360deg); }
 .link-btn {
   appearance: none;
   border: 0;
@@ -553,9 +569,17 @@ input::placeholder { color: var(--muted-2); }
   color: var(--muted-2);
   font-size: 12.5px;
 }
-.foot-links { display: flex; gap: 18px; margin-bottom: 8px; }
-.foot-links a { color: var(--muted); text-decoration: none; }
-.foot-links a:hover { color: var(--blue); }
+.foot-links { display: flex; gap: 18px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+.foot-links a, .foot-link { color: var(--muted); text-decoration: none; }
+.foot-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.foot-links a:hover, .foot-link:hover { color: var(--blue); }
 
 /* ------------------------------------------------------------ Toast / 弹窗 */
 
