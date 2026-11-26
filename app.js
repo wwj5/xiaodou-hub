@@ -49,6 +49,50 @@
     return String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
+  /** 从官方邀请链接里把邀请码捞出来；也容忍「邀请码：ABCD」这类文本 */
+  function extractCode(input) {
+    const text = String(input || "").trim();
+    if (!text) return "";
+
+    const paramKeys = ["invite_code", "inviteCode", "invitation_code", "icode", "code", "invite"];
+
+    // 1) 纯链接（或链接里带参数）
+    const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i);
+    if (urlMatch) {
+      const raw = urlMatch[0];
+      try {
+        const url = new URL(raw);
+        for (const k of paramKeys) {
+          const v = url.searchParams.get(k);
+          if (v) {
+            const c = normalizeCode(v);
+            if (c.length >= CFG.codeMinLen) return c;
+          }
+        }
+        // 路径里形如 /invite/ABCD1234 或 /i/ABCD1234
+        const segs = url.pathname.split("/").filter(Boolean);
+        for (let i = segs.length - 1; i >= 0; i -= 1) {
+          const c = normalizeCode(segs[i]);
+          if (/^[A-Za-z0-9]{4,32}$/.test(segs[i]) && c.length >= CFG.codeMinLen) return c;
+        }
+      } catch (e) { /* 不是合法 URL，落到下面的文本解析 */ }
+      // 链接里没解析出参数，再看 ?xxx=CODE 这种土办法
+      const q = raw.match(/[?&](?:invite_?code|code|icode|invite)=([^&#\s]+)/i);
+      if (q) {
+        const c = normalizeCode(decodeURIComponent(q[1]));
+        if (c.length >= CFG.codeMinLen) return c;
+      }
+      return "";
+    }
+
+    // 2) 文本里带「邀请码」字样
+    const labeled = text.match(/邀请码[^A-Za-z0-9]{0,6}([A-Za-z0-9]{4,32})/);
+    if (labeled) return normalizeCode(labeled[1]);
+
+    // 3) 干脆就是一串码
+    return normalizeCode(text);
+  }
+
   function beijingDate() {
     return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   }
@@ -416,10 +460,22 @@
     }
   }
 
+  function openShare() {
+    $("#shareError").hidden = true;
+    $("#shareModal").hidden = false;
+    setTimeout(() => $("#codeInput").focus(), 120);
+  }
+
+  function closeShare() {
+    $("#shareModal").hidden = true;
+  }
+
   function wire() {
-    $("#shareJump").addEventListener("click", () => {
-      $("#sharePanel").scrollIntoView({ behavior: "smooth", block: "center" });
-      setTimeout(() => $("#codeInput").focus(), 320);
+    $("#shareJump").addEventListener("click", openShare);
+    $("#shareClose").addEventListener("click", closeShare);
+    $("#shareCancel").addEventListener("click", closeShare);
+    $("#shareModal").addEventListener("click", (e) => {
+      if (e.target.id === "shareModal") closeShare();
     });
 
     $("#refreshBtn").addEventListener("click", () => { toast("已刷新"); load(); });
@@ -428,8 +484,14 @@
       e.preventDefault();
       const errBox = $("#shareError");
       errBox.hidden = true;
-      const code = normalizeCode($("#codeInput").value);
+      const raw = $("#codeInput").value;
+      const code = extractCode(raw);
       const spots = parseInt($("#spotsInput").value, 10);
+      if (!code) {
+        errBox.textContent = "没从这段内容里解析出邀请码，检查一下链接是否完整";
+        errBox.hidden = false;
+        return;
+      }
       if (code.length < CFG.codeMinLen || code.length > CFG.codeMaxLen) {
         errBox.textContent = "邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字";
         errBox.hidden = false;
@@ -441,6 +503,7 @@
       try {
         await api.publish(code, spots);
         $("#codeInput").value = "";
+        closeShare();
         toast("已放进队列：" + code);
         await load();
       } catch (err) {
@@ -448,7 +511,7 @@
         errBox.hidden = false;
       } finally {
         btn.disabled = false;
-        btn.textContent = "立即分享";
+        btn.textContent = "提交邀请码";
       }
     });
 

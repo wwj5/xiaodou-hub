@@ -105,32 +105,13 @@
     </div>
   </section>
 
-  <section class="share-panel" id="sharePanel">
-    <div class="share-head">
-      <h2>分享一个邀请码</h2>
-      <p>发布后排到队尾。同一个人最多保留 1 个可用码，码只有揭晓的人能看到。</p>
-    </div>
-    <form class="share-form" id="shareForm" autocomplete="off">
-      <div class="field grow">
-        <label for="codeInput">邀请码</label>
-        <input id="codeInput" name="code" placeholder="粘贴你的小豆邀请码" spellcheck="false" maxlength="40" />
-      </div>
-      <div class="field narrow">
-        <label for="spotsInput">剩余次数</label>
-        <select id="spotsInput" name="spots"></select>
-      </div>
-      <button class="primary-btn submit" type="submit" id="shareSubmit">立即分享</button>
-    </form>
-    <p class="form-error" id="shareError" hidden></p>
-  </section>
-
   <section class="rules" id="rules">
     <h2>如何获取并分享邀请码</h2>
     <ol>
-      <li><span>1</span><div><b>拿到资格</b><p>在小豆 App 内完成邀请任务，获得自己的邀请码与额度积分。</p></div></li>
-      <li><span>2</span><div><b>放进来</b><p>用上面的「分享邀请码」把码放进队列，写清还能被用几次。</p></div></li>
-      <li><span>3</span><div><b>别人揭晓</b><p>队列里的人点「揭晓」拿到明文，那一刻自动标记已领取、次数 −1。</p></div></li>
-      <li><span>4</span><div><b>去官方兑换</b><p>拿到码后到小豆官方页面兑换，兑换成功双方各得积分。</p></div></li>
+      <li><span>1</span><div><b>打开个人页</b><p>在小豆 App 底部点最右侧的人形图标。</p></div></li>
+      <li><span>2</span><div><b>进入设置</b><p>点页面右上角的齿轮，找到「邀请好友体验小豆」。</p></div></li>
+      <li><span>3</span><div><b>复制并分享</b><p>复制邀请码或官方邀请链接，粘到本页提交，链接会自动解析出码。</p></div></li>
+      <li><span>4</span><div><b>别人揭晓</b><p>队列里的人点「揭晓」拿到明文，那一刻自动标记已领取、次数 −1。</p></div></li>
     </ol>
     <p class="rules-caveat">
       本站是社区互助项目，与小豆官方无隶属关系，也没有获得授权。邀请码由成员自行分享，
@@ -141,7 +122,7 @@
   <footer class="site-foot">
     <div class="foot-links">
       <a href="#rules">关于本站</a>
-      <a href="#sharePanel">分享邀请码</a>
+      <a href="#rules">怎么拿到邀请码</a>
       <a href="#rules">免责声明</a>
     </div>
     <p>本地静态站 · Supabase 共享数据 · 无账号体系</p>
@@ -149,6 +130,31 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="modal-card compact">
+    <div class="modal-head">
+      <h3>分享邀请码</h3>
+      <button class="icon-btn" id="shareClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <form class="modal-body" id="shareForm" autocomplete="off">
+      <div class="field">
+        <label for="codeInput">邀请码或官方邀请链接</label>
+        <input id="codeInput" name="code" placeholder="粘贴邀请码，或分享链接" spellcheck="false" maxlength="400" />
+      </div>
+      <p class="modal-note">请提交真实邀请码；同一个人最多保留 1 个可用码，码只有揭晓的人能看到。</p>
+      <div class="field narrow">
+        <label for="spotsInput">还能被用几次</label>
+        <select id="spotsInput" name="spots"></select>
+      </div>
+      <p class="form-error" id="shareError" hidden></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="shareSubmit" type="submit">提交邀请码</button>
+        <button class="line-btn" id="shareCancel" type="button">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="modal" id="adminModal" hidden>
   <div class="modal-card">
