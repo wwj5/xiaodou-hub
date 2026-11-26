@@ -96,14 +96,28 @@
 - 管理密钥是高权限凭据，只应放在管理员自己的设备上，别进仓库、别发群。
 - Supabase Security Advisor 仍会把「anon 可执行 SECURITY DEFINER」标成警告，这是匿名 RPC 架构必然提示。
 
-## 七、本地预览
+## 七、当前线上实例
+
+| 项 | 值 |
+|---|---|
+| 站点 | https://wwj5.github.io/xiaodou-hub/ |
+| 仓库 | https://github.com/wwj5/xiaodou-hub （public） |
+| Supabase 项目 | `cusioozwyyrdghgvaaqw` · 组织 `xiaodou` · 区域 Southeast Asia (Singapore) · FREE |
+| 后端 URL | https://cusioozwyyrdghgvaaqw.supabase.co |
+| 前端配置 | `config.js` 里 `supabaseUrl` + anon key（anon key 是公开可暴露的，RLS 兜底） |
+| 管理密钥 | 只写在本地 `.supabase-keys.txt`（已 gitignore，不进仓库） |
+| 数据库密码 | 只写在本地 `.supabase-db-password.txt`（已 gitignore）；丢了可在 Dashboard → Settings → Database 重置 |
+
+改代码后 `git push origin main`，GitHub Actions 自动重跑并发布，约 30 秒上线。
+
+## 八、本地预览
 
 ```bash
 python -m http.server 8787
 # 打开 http://127.0.0.1:8787
 ```
 
-## 八、表结构速览
+## 九、表结构速览
 
 | 表 | 作用 |
 |---|---|
@@ -113,8 +127,10 @@ python -m http.server 8787
 | `feedback` | 反馈收件箱 |
 | `app_settings` | 单行通用管理密钥的 SHA-256 |
 
-## 九、已验证
+## 十、已验证
 
-- 本地浏览器实测：遮罩展示、揭晓出码并自动复制、配额 2→1→0、按钮变「今日名额已用完」、本机记录同步。
+- 线上 Supabase 实测（anon key 直调 RPC）：`list_codes` 只给 `mask`、`publish_code` 成功入队、
+  `reveal_code` 出码并让 `revealedCount` 从 0 → 1。
 - 嵌入式 PostgreSQL 实跑 `schema.sql`：列表返回不含 `code` 键、`reveal_code` 返回明文并扣减次数、
   第三次揭晓被每日配额拦住、同码重复揭晓被拦、`anon` 只能拿到遮罩、管理端可见明文。
+- 接力硬规则实测：接过 2 个码未分享 → 揭晓被拦；发布自己的码后 → 解锁可揭晓。
