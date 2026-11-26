@@ -351,9 +351,11 @@ begin
     from public.reports
    where visitor_hash = v_visitor and action = 'reveal';
   -- 接力规则：第一个码免费接，之后"接过 N 个"必须至少放回 N-1 个
+  -- 只算"还留在池子里、没被管理员下架"的码：发废码占位被发现下架后，解锁同样失效
   select count(*) into v_pub_n
-    from public.publish_log
-   where visitor_hash = v_visitor;
+    from public.invite_codes
+   where creator_hash = v_visitor
+     and status <> 'expired';
   if v_total_n >= v_pub_n + 1 then
     raise exception '接力规则：你已经接过 % 个邀请码，只放回 % 个。先把自己的邀请码分享进来，才能继续揭晓',
       v_total_n, v_pub_n using errcode = 'P0001';
