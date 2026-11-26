@@ -205,7 +205,24 @@
     },
   };
 
-  /* 接力：接过别人的码，就该把自己的码放回来 */
+  /* 接力：接过别人的码，就该把自己的码放回来。
+     远端模式下待还数量以服务端为准（本地只记录演示模式与一次性的临时提示）。 */
+  function relayPending() {
+    if (state.relay) return Math.max(0, Number(state.relay.pending) || 0);
+    if (MODE === "remote") return 0;
+    return relay.state().pending || 0;
+  }
+
+  function relayBump(delta) {
+    if (state.relay) {
+      state.relay.taken = Math.max(0, (Number(state.relay.taken) || 0) + Math.max(0, delta));
+      state.relay.returned = Math.max(0, (Number(state.relay.returned) || 0) + Math.max(0, -delta));
+      state.relay.pending = Math.max(0, state.relay.taken - state.relay.returned);
+    } else if (MODE !== "remote") {
+      if (delta > 0) relay.take(); else relay.done();
+    }
+  }
+
   const relay = {
     state() {
       try { return JSON.parse(localStorage.getItem(RELAY_KEY) || '{"pending":0}'); } catch (e) { return { pending: 0 }; }
@@ -404,6 +421,7 @@
     used: [],
     stats: { issued: 0, available: 0, revealed: 0, revealedCount: 0 },
     quota: { remaining: CFG.dailyReveals, limit: CFG.dailyReveals, resetAt: "北京时间 00:00" },
+    relay: null,
     busy: false,
     feedbackTarget: null,
   };
@@ -420,7 +438,7 @@
   }
 
   function renderRelay() {
-    const pending = relay.state().pending || 0;
+    const pending = relayPending();
     const strip = $("#relayStrip");
     if (!strip) return;
     strip.hidden = pending <= 0;
@@ -495,6 +513,8 @@
       state.used = usedRes.cards || [];
       state.stats = availRes.stats || state.stats;
       if (availRes.quota) state.quota = availRes.quota;
+      if (availRes.relay) state.relay = availRes.relay;
+      if (MODE === "remote") localStorage.removeItem(RELAY_KEY);
       renderAll();
     } catch (e) {
       $("#list").innerHTML = '<div class="history-empty">加载失败：' + esc(e.message) + "</div>";
@@ -515,7 +535,7 @@
       if (res.quotaRemaining != null) state.quota = { ...state.quota, remaining: res.quotaRemaining };
       const ok = await copyText(res.code);
       toast("揭晓成功：" + res.code + (ok ? "，已复制" : "，请手动复制"));
-      relay.take();
+      relayBump(+1);
       renderRelay();
       $("#relayCode").textContent = res.code;
       $("#relayModal").hidden = false;
@@ -584,7 +604,7 @@
         await api.publish(code, 1);
         $("#codeInput").value = "";
         closeShare();
-        relay.done();
+        relayBump(-1);
         renderRelay();
         toast("接力完成，已放进队列：" + code);
         await load();

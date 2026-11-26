@@ -195,6 +195,9 @@ declare
   v_query  text := upper(regexp_replace(coalesce(p_query, ''), '[^A-Za-z0-9]', '', 'g'));
   v_limit  integer := least(greatest(coalesce(p_limit, 500), 1), 500);
   v_offset integer := greatest(coalesce(p_offset, 0), 0);
+  v_hash   text := public.hub_hash(p_token);
+  v_taken  integer;
+  v_return integer;
   v_cards  json;
 begin
   select coalesce(json_agg(t.card), '[]'::json)
@@ -212,6 +215,19 @@ begin
        limit v_limit offset v_offset
     ) t;
 
+  -- 接力状态：接过多少（只算码还在池子里的）、放回多少（未被下架的）
+  select count(*) into v_taken
+    from public.reports r
+    join public.invite_codes c on c.id = r.code_id
+   where r.visitor_hash = v_hash
+     and r.action = 'reveal'
+     and c.status <> 'expired';
+
+  select count(*) into v_return
+    from public.invite_codes
+   where creator_hash = v_hash
+     and status <> 'expired';
+
   return json_build_object(
     'ok', true,
     'cards', v_cards,
@@ -225,6 +241,12 @@ begin
       )),
       'limit', 2,
       'resetAt', '北京时间 00:00'
+    ),
+    'relay', json_build_object(
+      'taken', v_taken,
+      'returned', v_return,
+      'pending', greatest(0, v_taken - v_return),
+      'blocked', v_taken >= v_return + 1
     )
   );
 end;
@@ -347,9 +369,13 @@ begin
   end if;
 
   -- 免费纯接力：接过 2 个码还没往池子里放过任何一个，就先别接着接了
+  -- 只算"码还在池子里/还没被下架"的揭晓：管理员删掉或下架那个码，这笔接力记录就不再算数
   select count(*) into v_total_n
-    from public.reports
-   where visitor_hash = v_visitor and action = 'reveal';
+    from public.reports r
+    join public.invite_codes c on c.id = r.code_id
+   where r.visitor_hash = v_visitor
+     and r.action = 'reveal'
+     and c.status <> 'expired';
   -- 接力规则：第一个码免费接，之后"接过 N 个"必须至少放回 N-1 个
   -- 只算"还留在池子里、没被管理员下架"的码：发废码占位被发现下架后，解锁同样失效
   select count(*) into v_pub_n
