@@ -448,6 +448,45 @@
 
   /* ---------------------------------------------------------- 渲染 */
 
+  /* ---------------------------------------------------------- 水印（后台可配） */
+
+  const WM_DEFAULT = { line1: "自觉回填邀请码", line2: "拿码不回 · 限制设备", opacity: 0.11 };
+  let wmKey = "";
+
+  function wmTile(wm) {
+    const W = 390, H = 255, dpr = 2;
+    const cv = document.createElement("canvas");
+    cv.width = W * dpr;
+    cv.height = H * dpr;
+    const ctx = cv.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate((-21 * Math.PI) / 180);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#2f65e3";
+    ctx.font = '700 30px "Microsoft YaHei", "PingFang SC", sans-serif';
+    ctx.fillText(wm.line1, 0, -6);
+    ctx.font = '500 24px "Microsoft YaHei", "PingFang SC", sans-serif';
+    ctx.fillText(wm.line2, 0, 36);
+    return cv.toDataURL("image/png");
+  }
+
+  function applyWatermark(wm) {
+    const layer = $("#wmLayer") || document.querySelector(".wm-layer");
+    if (!layer) return;
+    const cfg = {
+      line1: (wm && wm.line1) || WM_DEFAULT.line1,
+      line2: (wm && wm.line2) || WM_DEFAULT.line2,
+      opacity: wm && wm.opacity != null ? Number(wm.opacity) : WM_DEFAULT.opacity,
+    };
+    const key = cfg.line1 + "|" + cfg.line2 + "|" + cfg.opacity;
+    layer.style.opacity = String(isFinite(cfg.opacity) ? cfg.opacity : WM_DEFAULT.opacity);
+    if (key === wmKey) return;
+    wmKey = key;
+    layer.style.backgroundImage = 'url("' + wmTile(cfg) + '")';
+    layer.style.backgroundSize = "390px 255px";
+  }
+
   function renderStats() {
     $("#statIssued").textContent = state.stats.issued ?? "—";
     $("#statAvailable").textContent = state.stats.available ?? "—";
@@ -458,6 +497,7 @@
       note.hidden = un <= 0;
       note.textContent = un > 0 ? "（有 " + un + " 人拿了码还没放回来）" : "";
     }
+    applyWatermark(state.stats.wm);
   }
 
   function renderEmpty(show) {

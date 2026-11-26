@@ -590,7 +590,8 @@ input::placeholder { color: var(--muted-2); }
   opacity: .11;
 }
 @media (prefers-color-scheme: dark) {
-  .wm-layer { filter: invert(1); opacity: .13; }
+  /* 深色下不反白：水印由前端用蓝色文字现场画，反白会变橘色 */
+  .wm-layer { opacity: .13; }
 }
 
 .toast {

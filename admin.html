@@ -40,6 +40,10 @@
   .adm-grace { gap: 6px; }
   .adm-grace input { width: 62px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 7px;
                      font-size: 12.5px; font-family: inherit; color: #33415c; }
+  .adm-wm input[type="text"] { width: 168px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px;
+                               font-size: 13px; font-family: inherit; color: #33415c; }
+  .adm-wm input[type="number"] { width: 74px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px;
+                                 font-size: 12.5px; font-family: inherit; color: #33415c; }
   .adm-tab { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
              padding: 6px 12px; border-radius: 999px; font-size: 13px; font-family: inherit; cursor: pointer; }
   .adm-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -193,6 +197,29 @@
         <tbody id="rejBody"></tbody>
       </table>
       <div class="adm-empty" id="rejEmpty" hidden>还没有被拒的记录。</div>
+    </div>
+
+    <div class="adm-sec">
+      <h2>页面水印</h2>
+      <p class="hint">
+        首页那层斜向水印的文字和深浅，在这儿改完保存，访客刷新页面就变，不用重新部署。
+        两行都别太长（40 字以内），透明度 0–0.35：越大越显眼，太大会挡字。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <label class="adm-check adm-wm">第一行
+          <input id="wmLine1" type="text" maxlength="40" placeholder="自觉回填邀请码" />
+        </label>
+        <label class="adm-check adm-wm">第二行
+          <input id="wmLine2" type="text" maxlength="40" placeholder="拿码不回 · 限制设备" />
+        </label>
+        <label class="adm-check adm-wm">透明度
+          <input id="wmOpacity" type="number" min="0" max="0.35" step="0.01" />
+        </label>
+        <div class="adm-right">
+          <button class="adm-mini" id="wmReset" type="button">恢复默认</button>
+          <button class="adm-mini" id="wmSave" type="button">保存水印</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -369,8 +396,56 @@
       const s = await rpc("admin_settings", { p_key: listKey });
       if (!s) return;
       $("#graceInput").value = s.graceMinutes != null ? s.graceMinutes : 5;
+      if (s.wm) {
+        $("#wmLine1").value = s.wm.line1 || "";
+        $("#wmLine2").value = s.wm.line2 || "";
+        $("#wmOpacity").value = s.wm.opacity != null ? s.wm.opacity : 0.11;
+      }
     } catch (err) { onFail(err); }
   }
+
+  /* ---------------- 页面水印 ---------------- */
+
+  async function saveWatermark(line1, line2, opacity, note) {
+    const btn = $("#wmSave");
+    btn.disabled = true;
+    try {
+      const res = await rpc("admin_set_watermark", {
+        p_key: listKey,
+        p_line1: line1,
+        p_line2: line2,
+        p_opacity: Number(opacity),
+      });
+      $("#wmLine1").value = res.wm.line1;
+      $("#wmLine2").value = res.wm.line2;
+      $("#wmOpacity").value = res.wm.opacity;
+      toast(note || "水印已保存，刷新首页就能看到");
+    } catch (err) {
+      toast(err.message || "保存失败");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("#wmSave").addEventListener("click", () => {
+    const l1 = $("#wmLine1").value.trim();
+    const l2 = $("#wmLine2").value.trim();
+    const op = Number($("#wmOpacity").value);
+    if (!l1 && !l2) { toast("两行至少留一行字"); return; }
+    if (!isFinite(op) || op < 0 || op > 0.35) { toast("透明度要在 0–0.35 之间"); return; }
+    saveWatermark(l1, l2, op);
+  });
+
+  $("#wmReset").addEventListener("click", () => {
+    askConfirm(
+      "水印恢复默认",
+      "会改回「自觉回填邀请码 / 拿码不回 · 限制设备」，透明度 0.11。",
+      "恢复默认",
+      async () => {
+        await saveWatermark("自觉回填邀请码", "拿码不回 · 限制设备", 0.11, "水印已恢复默认");
+      }
+    );
+  });
 
   $("#graceSave").addEventListener("click", async (e) => {
     const btn = e.currentTarget;

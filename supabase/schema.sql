@@ -70,6 +70,14 @@ create table if not exists public.app_settings (
 alter table public.app_settings
   add column if not exists autoblock_minutes integer not null default 5;
 
+-- 页面水印：后台可改字、可调深浅；前端用 canvas 现场画，不用重新部署
+alter table public.app_settings
+  add column if not exists wm_line1 text not null default '自觉回填邀请码';
+alter table public.app_settings
+  add column if not exists wm_line2 text not null default '拿码不回 · 限制设备';
+alter table public.app_settings
+  add column if not exists wm_opacity numeric not null default 0.11;
+
 -- 拉黑名单：只按设备指纹，不记 IP、不记个人身份信息
 -- kind: manual = 管理员手动限制；auto = 超时未回填自动限制（回填后会自动解除）
 create table if not exists public.visitor_blocks (
@@ -225,7 +233,13 @@ as $$
        where a.n > coalesce(b.n, 0)
     ),
     -- 超时未回填的宽限分钟（前端用来提示"多久内必须放回"）
-    'graceMinutes',   public.hub_grace_minutes()
+    'graceMinutes',   public.hub_grace_minutes(),
+    -- 页面水印（后台可改，前端现场画）
+    'wm', json_build_object(
+      'line1',   coalesce((select wm_line1   from public.app_settings where id = true), '自觉回填邀请码'),
+      'line2',   coalesce((select wm_line2   from public.app_settings where id = true), '拿码不回 · 限制设备'),
+      'opacity', coalesce((select wm_opacity from public.app_settings where id = true), 0.11)
+    )
   );
 $$;
 
@@ -1144,7 +1158,44 @@ set search_path = public, pg_temp
 as $$
 begin
   perform public.hub_require_admin(p_key);
-  return json_build_object('graceMinutes', public.hub_grace_minutes());
+  return json_build_object(
+    'graceMinutes', public.hub_grace_minutes(),
+    'wm', (
+      select json_build_object(
+        'line1', wm_line1, 'line2', wm_line2, 'opacity', wm_opacity
+      ) from public.app_settings where id = true
+    )
+  );
+end;
+$$;
+
+-- 水印：改字、改深浅，改完首页刷新就变，不用重新部署
+create or replace function public.admin_set_watermark(
+  p_key     text,
+  p_line1   text,
+  p_line2   text,
+  p_opacity numeric
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_op numeric := least(greatest(coalesce(p_opacity, 0.11), 0), 0.35);
+begin
+  perform public.hub_require_admin(p_key);
+  update public.app_settings
+     set wm_line1   = left(coalesce(nullif(trim(p_line1), ''), '自觉回填邀请码'), 40),
+         wm_line2   = left(coalesce(nullif(trim(p_line2), ''), '拿码不回 · 限制设备'), 40),
+         wm_opacity = v_op,
+         updated_at = now()
+   where id = true;
+  return json_build_object(
+    'ok', true,
+    'wm', (select json_build_object('line1', wm_line1, 'line2', wm_line2, 'opacity', wm_opacity)
+             from public.app_settings where id = true)
+  );
 end;
 $$;
 
@@ -1233,6 +1284,7 @@ revoke all on function public.admin_block(text, text, text) from public;
 revoke all on function public.admin_unblock(text, text) from public;
 revoke all on function public.admin_settings(text) from public;
 revoke all on function public.admin_set_autoblock(text, integer) from public;
+revoke all on function public.admin_set_watermark(text, text, text, numeric) from public;
 revoke all on function public.admin_rejects(text, integer) from public;
 revoke all on function public.admin_clear_rejects(text) from public;
 revoke all on function public.hub_reject(text, text, text, text) from public;
@@ -1256,6 +1308,7 @@ grant execute on function public.admin_block(text, text, text) to anon, authenti
 grant execute on function public.admin_unblock(text, text) to anon, authenticated;
 grant execute on function public.admin_settings(text) to anon, authenticated;
 grant execute on function public.admin_set_autoblock(text, integer) to anon, authenticated;
+grant execute on function public.admin_set_watermark(text, text, text, numeric) to anon, authenticated;
 grant execute on function public.admin_rejects(text, integer) to anon, authenticated;
 grant execute on function public.admin_clear_rejects(text) to anon, authenticated;
 
