@@ -245,6 +245,9 @@ as $$
     'claimedCount',   p_row.claimed_count,
     'queueRank',      p_row.queue_rank,
     'createdAt',      p_row.created_at,
+    -- 已经被揭走的码（remaining 0 / 已下架）在「领取记录」里直接给明文：
+    -- 这些码已经交到一个接码人手里，标「可能已被使用」提醒后来者别惦记
+    'codePlain',      case when p_row.status <> 'available' then p_row.code else null end,
     -- 15 分钟内放进来的算「实时新码」，前端置顶并打标
     'fresh',          p_row.created_at >= now() - interval '15 minutes'
   );

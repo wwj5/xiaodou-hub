@@ -320,6 +320,7 @@
         claimedCount: c.claimedCount,
         queueRank: c.queueRank,
         createdAt: c.createdAt,
+        codePlain: c.status === "available" ? null : c.code,
         fresh: Date.now() - new Date(c.createdAt).getTime() < 15 * 60 * 1000,
       };
     },
@@ -518,24 +519,35 @@
     }).join("");
   }
 
+  function historyCode(c) {
+    const got = mine.get(c.id);
+    if (got) return got.code;
+    return c.codePlain || ""; // 已揭走的码，服务端直接给明文（标「可能已被使用」）
+  }
+
   function renderHistory() {
     const box = $("#historyList");
     if (!state.used.length) {
       box.innerHTML = '<div class="history-empty">还没有人揭晓过。等你放第一个码进来。</div>';
+      $("#historyNote").textContent = "最近被揭晓的码";
       return;
     }
-    box.innerHTML = state.used.slice(0, 20).map((c) => {
+    box.innerHTML = state.used.slice(0, 60).map((c) => {
+      const code = historyCode(c);
       const got = mine.get(c.id);
       return (
-        '<div class="hrow">' +
-          '<span class="htag">已领取</span>' +
-          '<span class="hcode' + (got ? " revealed" : "") + '">' + esc(got ? got.code : c.mask) + "</span>" +
-          '<span class="hmeta">' + c.claimedCount + " 次揭晓 · " + timeAgo(c.createdAt) + "</span>" +
-          (got ? '<button class="mini-btn" data-act="copy" data-id="' + esc(c.id) + '">复制</button>' : "") +
-        "</div>"
+        '<article class="hcard">' +
+          '<div class="hcard-top"><span class="htag">可能已被使用</span>' +
+            '<span class="hcount">' + c.claimedCount + " 次揭晓</span></div>" +
+          '<div class="hcode' + (code ? " revealed" : "") + '">' + esc(code || c.mask) + "</div>" +
+          '<div class="hmeta"><span>' + timeAgo(c.createdAt) + "</span>" +
+            (code ? '<button class="mini-btn" data-act="copy" data-id="' + esc(c.id) + '">复制</button>' : "") +
+            (got ? "" : "") +
+          "</div>" +
+        "</article>"
       );
     }).join("");
-    $("#historyNote").textContent = "共 " + state.used.length + " 条";
+    $("#historyNote").textContent = "共 " + state.used.length + " 条 · 都是已经被揭走的码，大多已经被别人注册用掉了";
   }
 
   function renderAll() {
@@ -677,9 +689,12 @@
       if (btn.dataset.act === "reveal") return doReveal(id);
       if (btn.dataset.act === "copy") {
         const got = mine.get(id);
-        if (!got) return;
-        const ok = await copyText(got.code);
-        toast(ok ? "已复制：" + got.code : "复制失败，请手动选中", !ok);
+        const card = state.avail.find((c) => String(c.id) === id) ||
+                     state.used.find((c) => String(c.id) === id);
+        const code = got ? got.code : (card && card.codePlain) || "";
+        if (!code) return;
+        const ok = await copyText(code);
+        toast(ok ? "已复制：" + code : "复制失败，请手动选中", !ok);
         return;
       }
       if (btn.dataset.act === "feedback") {
