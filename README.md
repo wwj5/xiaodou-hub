@@ -27,6 +27,10 @@
   <img alt="后台：待发码申请" src="assets/shot-admin.png" width="420">
 </p>
 
+<p>
+  <img alt="申请弹窗：填怎么联系你" src="assets/shot-request.png" width="420">
+</p>
+
 > 非官方项目，与小豆官方无隶属关系。
 
 ## 一、跟 muse-invite-hub / BetterOPC 的关系
