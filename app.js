@@ -25,6 +25,7 @@
   const TOKEN_KEY = "xd:visitor";
   const ADMIN_KEY = "xd:admin";
   const MINE_KEY = "xd:mymask";
+  const RELAY_KEY = "xd:relay";
   const DEMO_KEY = "xd:demo:v2";
 
   /* ---------------------------------------------------------- 工具 */
@@ -159,6 +160,21 @@
       keys.slice(0, 50).forEach((k) => { out[k] = m[k]; });
       localStorage.setItem(MINE_KEY, JSON.stringify(out));
     },
+  };
+
+  /* 接力：接过别人的码，就该把自己的码放回来 */
+  const relay = {
+    state() {
+      try { return JSON.parse(localStorage.getItem(RELAY_KEY) || '{"pending":0}'); } catch (e) { return { pending: 0 }; }
+    },
+    save(s) { localStorage.setItem(RELAY_KEY, JSON.stringify(s)); },
+    take() {
+      const s = this.state();
+      s.pending = (s.pending || 0) + 1;
+      this.save(s);
+      return s.pending;
+    },
+    done() { this.save({ pending: 0 }); },
   };
 
   /* ---------------------------------------------------------- 远端 */
@@ -361,6 +377,17 @@
     $("#emptyCard").hidden = !show;
   }
 
+  function renderRelay() {
+    const pending = relay.state().pending || 0;
+    const strip = $("#relayStrip");
+    if (!strip) return;
+    strip.hidden = pending <= 0;
+    if (pending > 0) {
+      $("#relayText").textContent =
+        "你已经从池子里接过 " + pending + " 个码，等你的邀请码下来了，也放回来给下一个人。";
+    }
+  }
+
   function renderGrid() {
     const list = $("#list");
     renderEmpty(state.avail.length === 0);
@@ -409,6 +436,7 @@
 
   function renderAll() {
     renderStats();
+    renderRelay();
     renderGrid();
     renderHistory();
   }
@@ -452,6 +480,10 @@
       if (res.quotaRemaining != null) state.quota = { ...state.quota, remaining: res.quotaRemaining };
       const ok = await copyText(res.code);
       toast("揭晓成功：" + res.code + (ok ? "，已复制" : "，请手动复制"));
+      relay.take();
+      renderRelay();
+      $("#relayCode").textContent = res.code;
+      $("#relayModal").hidden = false;
       await load();
     } catch (e) {
       toast(e.message, true);
@@ -461,6 +493,7 @@
   }
 
   function openShare() {
+    $("#relayModal").hidden = true;
     $("#shareError").hidden = true;
     $("#shareModal").hidden = false;
     setTimeout(() => $("#codeInput").focus(), 120);
@@ -472,6 +505,13 @@
 
   function wire() {
     $("#shareJump").addEventListener("click", openShare);
+    $("#relayShare").addEventListener("click", openShare);
+    $("#relayNow").addEventListener("click", openShare);
+    $("#relayLater").addEventListener("click", () => ($("#relayModal").hidden = true));
+    $("#relayClose").addEventListener("click", () => ($("#relayModal").hidden = true));
+    $("#relayModal").addEventListener("click", (e) => {
+      if (e.target.id === "relayModal") $("#relayModal").hidden = true;
+    });
     $("#shareClose").addEventListener("click", closeShare);
     $("#shareCancel").addEventListener("click", closeShare);
     $("#shareModal").addEventListener("click", (e) => {
@@ -504,7 +544,9 @@
         await api.publish(code, spots);
         $("#codeInput").value = "";
         closeShare();
-        toast("已放进队列：" + code);
+        relay.done();
+        renderRelay();
+        toast("接力完成，已放进队列：" + code);
         await load();
       } catch (err) {
         errBox.textContent = err.message;

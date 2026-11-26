@@ -42,14 +42,22 @@
         <span class="gift-ico">🎁</span> 邀请双方各得 1200 额度积分
       </div>
       <p class="gift-desc">
-        积分会在好友成功兑换后发放。拿到资格后，记得回来分享自己的邀请码，
-        帮下一位朋友体验，也能再赚积分。
+        免费、纯接力：这里不收钱也不卖码。你从别人手里接过码，等你自己的邀请码下来了，
+        也放回池子里，让下一个人接得上。
       </p>
       <a class="gift-link" href="#rules">如何获取并分享邀请码 →</a>
     </div>
   </section>
 
   <section class="codes">
+    <div class="relay-strip" id="relayStrip" hidden>
+      <div class="relay-copy">
+        <b>接力中</b>
+        <span id="relayText">你从池子里接过码，等你有了自己的邀请码，也放回来。</span>
+      </div>
+      <button class="line-btn" id="relayShare" type="button">去接力分享</button>
+    </div>
+
     <div class="sec-head">
       <div>
         <h2>社区共享的邀请码</h2>
@@ -153,6 +161,24 @@
         <button class="line-btn" id="shareCancel" type="button">取消</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal" id="relayModal" hidden>
+  <div class="modal-card compact">
+    <div class="modal-head">
+      <h3>拿到了，接力一下</h3>
+      <button class="icon-btn" id="relayClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <p class="relay-code" id="relayCode">—</p>
+    <p class="modal-note">
+      免费纯接力：码是别人接给你的，不是卖的。等你自己的邀请码下来了，
+      也放回池子里，下一个人才能接得上。
+    </p>
+    <div class="modal-actions">
+      <button class="primary-btn" id="relayNow" type="button">现在去分享</button>
+      <button class="line-btn" id="relayLater" type="button">等我拿到码再来</button>
+    </div>
   </div>
 </div>
 
