@@ -4,105 +4,116 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
-<meta name="description" content="社区互助：把小豆邀请码放进队列，需要的人自取。非官方项目。" />
+<meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
 <link rel="stylesheet" href="styles.css" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23ff6a3d'/%3E%3Ctext x='50' y='70' font-size='54' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E8%B1%86%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%232f65e3'/%3E%3Ctext x='50' y='70' font-size='54' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E8%B1%86%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
-<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-wash" aria-hidden="true"></div>
 
-<header class="topbar">
-  <a class="brand" href="./">
-    <span class="brand-mark">豆</span>
-    <span class="brand-text">
-      <strong>小豆互助站</strong>
-      <em>invite code hub</em>
-    </span>
+<header class="site-head">
+  <a class="logo" href="./">
+    <span class="logo-star">✦</span>
+    <span class="logo-text">小豆互助站</span>
   </a>
-  <div class="topbar-actions">
-    <span class="disclaimer">非官方社区项目 · 邀请码由成员公开分享</span>
-    <button class="ghost-btn" id="adminBtn" type="button">管理密钥</button>
-    <button class="ghost-btn" id="refreshBtn" type="button">刷新</button>
+  <div class="head-actions">
+    <button class="link-btn" id="adminBtn" type="button">管理密钥</button>
+    <button class="link-btn" id="refreshBtn" type="button">刷新</button>
   </div>
 </header>
 
-<main>
-  <section class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">社区互助 · 先到先得</p>
-      <h1>小豆邀请码<br /><span>互助站</span></h1>
-      <p class="lede">
-        手里多出来的邀请码放进来，队列按发布顺序排、队首优先展示。
-        列表里只显示遮罩，点「揭晓」才拿到明文；揭晓那一刻就标记为已领取，
-        每人每天最多揭晓 2 个，所以码不会挂在明面上被脚本秒扫。
+<main class="wrap">
+  <section class="hero-card">
+    <div class="hero-top">
+      <div class="avatar">豆</div>
+      <div class="hero-id">
+        <p class="brand-tag">社区 · 非官方</p>
+        <h1>小豆邀请码</h1>
+        <p class="hero-sub">成员共享，揭晓才出码</p>
+        <span class="pill">浏览器直接打开</span>
+      </div>
+    </div>
+
+    <div class="gift-box">
+      <div class="gift-title">
+        <span class="gift-ico">🎁</span> 邀请双方各得 1200 额度积分
+      </div>
+      <p class="gift-desc">
+        积分会在好友成功兑换后发放。拿到资格后，记得回来分享自己的邀请码，
+        帮下一位朋友体验，也能再赚积分。
       </p>
-      <div class="hero-badge">
-        <span class="dot" id="heroDot"></span>
-        <span id="heroStatus">正在连接…</span>
-      </div>
-    </div>
-    <div class="stats">
-      <div class="stat">
-        <label>累计发放</label>
-        <b id="statIssued">—</b>
-        <small>条邀请码</small>
-      </div>
-      <div class="stat highlight">
-        <label>当前可揭晓</label>
-        <b id="statAvailable">—</b>
-        <small>条待揭</small>
-      </div>
-      <div class="stat">
-        <label>已揭晓</label>
-        <b id="statSpots">—</b>
-        <small>次揭晓</small>
-      </div>
+      <a class="gift-link" href="#rules">如何获取并分享邀请码 →</a>
     </div>
   </section>
 
-  <section class="passport" id="passport" hidden>
-    <div class="passport-head">
-      <span class="passport-label">NEXT IN QUEUE</span>
-      <span class="passport-rank" id="passportRank">顺位 #—</span>
-    </div>
-    <div class="passport-body">
-      <div class="passport-code" id="passportCode">—— —— ——</div>
-      <div class="passport-meta">
-        <div><label>剩余次数</label><b id="passportSpots">0 / 0</b></div>
-        <div><label>状态</label><b id="passportState">—</b></div>
-        <div><label>发布时间</label><b id="passportTime">—</b></div>
-      </div>
-    </div>
-    <div class="perf"></div>
-    <div class="passport-foot">
-      <div class="passport-actions">
-        <button class="primary-btn" id="passportReveal" type="button">点击揭晓</button>
-        <button class="line-btn" id="passportCopy" type="button" disabled>复制邀请码</button>
-        <button class="line-btn" id="passportFeedback" type="button">反馈问题</button>
-      </div>
-      <span class="quota-hint" id="quotaHint">今日揭晓名额：—</span>
-    </div>
-    <p class="reveal-note">揭晓后自动标记为已领取，请到小豆官方页面兑换。</p>
-  </section>
-
-  <section class="share-card" id="myCodesCard" hidden>
-    <div class="share-head">
+  <section class="codes">
+    <div class="sec-head">
       <div>
-        <h2>我揭晓到的码</h2>
-        <p>只存在你这个浏览器里，换设备、清缓存就没了，建议复制到别处保存。</p>
+        <h2>社区共享的邀请码</h2>
+        <p class="sec-sub">揭晓后自动标记为已领取，请到小豆官方页面兑换。</p>
       </div>
-      <span class="share-tip">本机记录</span>
+      <button class="primary-btn" id="shareJump" type="button">
+        <span class="plus">＋</span> 分享邀请码
+      </button>
     </div>
-    <div class="mine-list" id="myCodes"></div>
+
+    <div class="metrics">
+      <div class="metric blue">
+        <div class="metric-ico">▤</div>
+        <div>
+          <label>累计发放</label>
+          <div class="metric-val"><b id="statIssued">—</b><small>个</small></div>
+        </div>
+      </div>
+      <div class="metric green">
+        <div class="metric-ico">✔</div>
+        <div>
+          <label>当前可揭晓</label>
+          <div class="metric-val"><b id="statAvailable">—</b><small>个</small></div>
+        </div>
+      </div>
+      <div class="quota">
+        <div class="quota-top">
+          <span>今日可揭晓</span>
+          <b id="quotaText">— / —</b>
+        </div>
+        <div class="quota-bars" id="quotaBars"></div>
+        <button class="quota-hint-btn" id="quotaHintBtn" type="button">额度说明</button>
+      </div>
+    </div>
+
+    <div class="grid" id="list"></div>
+
+    <div class="empty-card" id="emptyCard" hidden>
+      <div class="empty-copy">
+        <h3>暂时没有可领取的邀请码</h3>
+        <p>池子里的码都被揭晓完的时候就会这样。有新码上架会立刻出现在上面。</p>
+        <div class="empty-note">你的揭晓额度仍可用，有新码上架后即可使用。</div>
+      </div>
+      <svg class="empty-art" viewBox="0 0 120 92" fill="none" aria-hidden="true">
+        <circle cx="46" cy="40" r="27" stroke="#2f65e3" stroke-width="2.2" opacity=".55" />
+        <ellipse cx="46" cy="40" rx="27" ry="11" stroke="#2f65e3" stroke-width="1.6" opacity=".35" />
+        <ellipse cx="46" cy="40" rx="11" ry="27" stroke="#2f65e3" stroke-width="1.6" opacity=".35" />
+        <circle cx="76" cy="56" r="15" stroke="#2f65e3" stroke-width="2.4" />
+        <path d="M87 67l10 10" stroke="#2f65e3" stroke-width="3.2" stroke-linecap="round" />
+        <circle cx="30" cy="22" r="2.2" fill="#2f65e3" opacity=".4" />
+        <circle cx="96" cy="30" r="3" fill="#2f65e3" opacity=".25" />
+      </svg>
+    </div>
+
+    <div class="history">
+      <div class="history-head">
+        <h3>领取记录</h3>
+        <span class="history-note" id="historyNote">最近被揭晓的码</span>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </div>
   </section>
 
-  <section class="share-card">
+  <section class="share-panel" id="sharePanel">
     <div class="share-head">
-      <div>
-        <h2>我要分享一个邀请码</h2>
-        <p>发布后会排到队尾。同一个人最多保留 1 个可用码。</p>
-      </div>
-      <span class="share-tip" id="shareTip">每人限 1 条</span>
+      <h2>分享一个邀请码</h2>
+      <p>发布后排到队尾。同一个人最多保留 1 个可用码，码只有揭晓的人能看到。</p>
     </div>
     <form class="share-form" id="shareForm" autocomplete="off">
       <div class="field grow">
@@ -118,31 +129,27 @@
     <p class="form-error" id="shareError" hidden></p>
   </section>
 
-  <section class="queue">
-    <div class="queue-head">
-      <h2>队列</h2>
-      <div class="queue-tools">
-        <div class="segmented" id="filter">
-          <button type="button" data-status="available" class="active">可揭晓</button>
-          <button type="button" data-status="used">已揭晓</button>
-          <button type="button" data-status="all">全部</button>
-        </div>
-        <div class="search">
-          <input id="searchInput" type="search" placeholder="搜索邀请码" spellcheck="false" />
-        </div>
-      </div>
-    </div>
-    <div class="list" id="list">
-      <div class="loading">正在加载队列…</div>
-    </div>
+  <section class="rules" id="rules">
+    <h2>如何获取并分享邀请码</h2>
+    <ol>
+      <li><span>1</span><div><b>拿到资格</b><p>在小豆 App 内完成邀请任务，获得自己的邀请码与额度积分。</p></div></li>
+      <li><span>2</span><div><b>放进来</b><p>用上面的「分享邀请码」把码放进队列，写清还能被用几次。</p></div></li>
+      <li><span>3</span><div><b>别人揭晓</b><p>队列里的人点「揭晓」拿到明文，那一刻自动标记已领取、次数 −1。</p></div></li>
+      <li><span>4</span><div><b>去官方兑换</b><p>拿到码后到小豆官方页面兑换，兑换成功双方各得积分。</p></div></li>
+    </ol>
+    <p class="rules-caveat">
+      本站是社区互助项目，与小豆官方无隶属关系，也没有获得授权。邀请码由成员自行分享，
+      有效性请自行判断；不要把别人的码转卖或大量转载。
+    </p>
   </section>
 
-  <footer>
-    <p>
-      本站为独立社区项目，与小豆官方无隶属关系，也未获授权。邀请码由成员自行分享，
-      有效性请自行判断；兑换请走小豆 App 内的官方邀请流程。
-    </p>
-    <p class="footer-meta">静态站点 · Supabase 共享数据 · 无账号体系</p>
+  <footer class="site-foot">
+    <div class="foot-links">
+      <a href="#rules">关于本站</a>
+      <a href="#sharePanel">分享邀请码</a>
+      <a href="#rules">免责声明</a>
+    </div>
+    <p>本地静态站 · Supabase 共享数据 · 无账号体系</p>
   </footer>
 </main>
 
@@ -156,8 +163,7 @@
     </div>
     <div class="modal-body">
       <p class="modal-note">
-        密钥不存在前端代码里，只保存在你自己的浏览器里。导入后可以调整任意码的剩余次数、
-        顺位和状态，也可以重新排队。
+        密钥只保存在你自己的浏览器里。导入后可以调整任意码的剩余次数、顺位与状态。
       </p>
       <div class="field">
         <label for="adminKeyInput">密钥</label>
@@ -169,11 +175,9 @@
         <button class="line-btn" id="adminClear" type="button">清除</button>
       </div>
       <div class="admin-panel" id="adminPanel" hidden>
-        <div class="admin-row">
-          <div class="field">
-            <label for="adminCodeInput">要修改的邀请码</label>
-            <input id="adminCodeInput" placeholder="输入池中已有的码" spellcheck="false" />
-          </div>
+        <div class="field">
+          <label for="adminCodeInput">要修改的邀请码</label>
+          <input id="adminCodeInput" placeholder="输入池中已有的码" spellcheck="false" />
         </div>
         <div class="admin-grid">
           <div class="field">
@@ -189,7 +193,7 @@
             <select id="adminStatus">
               <option value="">保持不变</option>
               <option value="available">可用</option>
-              <option value="used">已用完</option>
+              <option value="used">已揭完</option>
             </select>
           </div>
         </div>
