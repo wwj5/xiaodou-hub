@@ -560,6 +560,21 @@ input::placeholder { color: var(--muted-2); }
 
 /* ------------------------------------------------------------ Toast / 弹窗 */
 
+/* 页面水印：浅色下暗字，深色下自动反白；压在内容之上、弹窗之下，不影响点击 */
+.wm-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  background-image: url("assets/watermark.png");
+  background-size: 320px 219px;
+  background-repeat: repeat;
+  opacity: .075;
+}
+@media (prefers-color-scheme: dark) {
+  .wm-layer { filter: invert(1); opacity: .1; }
+}
+
 .toast {
   position: fixed;
   left: 50%;
