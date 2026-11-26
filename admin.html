@@ -177,7 +177,7 @@
       <table class="adm-table" id="ledgerTable">
         <thead>
           <tr>
-            <th>设备指纹</th><th>揭走的码</th><th>放回的码</th><th>揭晓</th><th>回填</th><th>欠</th><th>最后活跃</th><th>状态</th><th>操作</th>
+            <th>设备指纹</th><th>揭走的码</th><th>放回的码</th><th>揭 / 回</th><th>欠</th><th>最后活跃</th><th>状态</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="ledgerBody"></tbody>
@@ -513,8 +513,7 @@
         '<td><code title="' + esc(r.hash) + '">' + esc(r.short) + "…</code></td>" +
         codeCell(r.gotCodes, "got") +
         codeCell(r.gaveCodes, "gave") +
-        "<td>" + r.taken + "</td>" +
-        "<td>" + r.returned + "</td>" +
+        "<td>" + r.taken + " / " + r.returned + "</td>" +
         '<td>' + (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
         "<td>" + (r.lastAt ? fmtTime(r.lastAt) : "—") + "</td>" +
         "<td>" + ledgerState(r) + "</td>" +
