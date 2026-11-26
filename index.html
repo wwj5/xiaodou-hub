@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，揭晓才出码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=5" />
+<link rel="stylesheet" href="styles.css?v=6" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -136,7 +136,7 @@
       <a href="#rules">关于本站</a>
       <a href="#rules">怎么拿到邀请码</a>
       <a href="#rules">免责声明</a>
-      <button class="foot-link" id="adminBtn" type="button">管理入口</button>
+      <a class="foot-link" href="admin.html">管理入口</a>
     </div>
     <p>静态站 · Supabase 共享数据 · 无账号体系</p>
   </footer>
@@ -183,57 +183,6 @@
   </div>
 </div>
 
-<div class="modal" id="adminModal" hidden>
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3>管理密钥</h3>
-      <button class="icon-btn" id="adminClose" type="button" aria-label="关闭">×</button>
-    </div>
-    <div class="modal-body">
-      <p class="modal-note">
-        密钥只保存在你自己的浏览器里。导入后可以调整任意码的剩余次数、顺位与状态。
-      </p>
-      <div class="field">
-        <label for="adminKeyInput">密钥</label>
-        <input id="adminKeyInput" placeholder="粘贴管理员密钥" spellcheck="false" />
-      </div>
-      <p class="form-error" id="adminError" hidden></p>
-      <div class="modal-actions">
-        <button class="primary-btn" id="adminSave" type="button">导入并校验</button>
-        <button class="line-btn" id="adminClear" type="button">清除</button>
-      </div>
-      <div class="admin-panel" id="adminPanel" hidden>
-        <div class="field">
-          <label for="adminCodeInput">要修改的邀请码</label>
-          <input id="adminCodeInput" placeholder="输入池中已有的码" spellcheck="false" />
-        </div>
-        <div class="admin-grid">
-          <div class="field">
-            <label for="adminRemaining">剩余次数 (0–30)</label>
-            <input id="adminRemaining" type="number" min="0" max="30" step="1" />
-          </div>
-          <div class="field">
-            <label for="adminPosition">队列顺位</label>
-            <input id="adminPosition" type="number" min="1" step="1" />
-          </div>
-          <div class="field">
-            <label for="adminStatus">状态</label>
-            <select id="adminStatus">
-              <option value="">保持不变</option>
-              <option value="available">可用</option>
-              <option value="used">已揭完</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-btn" id="adminApply" type="button">保存修改</button>
-          <button class="line-btn" id="adminReseed" type="button">顺位重排 1..N</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="modal" id="feedbackModal" hidden>
   <div class="modal-card compact">
     <div class="modal-head">
@@ -264,6 +213,6 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

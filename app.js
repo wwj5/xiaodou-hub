@@ -352,14 +352,6 @@
         ? rpc("submit_feedback", { p_id: id, p_reason: reason, p_note: note, p_token: visitorToken() })
         : demo.feedback(id, reason, note, visitorToken());
     },
-    adminVerify(key) { return MODE === "remote" ? rpc("admin_verify", { p_key: key }) : demo.admin(); },
-    adminFind(code, key) { return MODE === "remote" ? rpc("admin_find", { p_code: code, p_key: key }) : demo.admin(); },
-    adminUpdate(id, key, p) {
-      return MODE === "remote"
-        ? rpc("admin_update", { p_id: id, p_key: key, p_remaining: p.remaining, p_position: p.position, p_status: p.status })
-        : demo.admin();
-    },
-    adminReseed(key) { return MODE === "remote" ? rpc("admin_reseed", { p_key: key }) : demo.admin(); },
   };
 
   /* ---------------------------------------------------------- 状态 */
@@ -586,53 +578,6 @@
     $("#list").addEventListener("click", onCardAction);
     $("#historyList").addEventListener("click", onCardAction);
 
-    // 管理
-    $("#adminBtn").addEventListener("click", openAdmin);
-    $("#adminClose").addEventListener("click", () => ($("#adminModal").hidden = true));
-    $("#adminModal").addEventListener("click", (e) => {
-      if (e.target.id === "adminModal") $("#adminModal").hidden = true;
-    });
-    $("#adminSave").addEventListener("click", async () => {
-      const key = $("#adminKeyInput").value.trim();
-      const err = $("#adminError");
-      err.hidden = true;
-      if (!key) { err.textContent = "先填密钥"; err.hidden = false; return; }
-      try {
-        await api.adminVerify(key);
-        localStorage.setItem(ADMIN_KEY, key);
-        $("#adminPanel").hidden = false;
-        toast("管理密钥已导入");
-      } catch (e) { err.textContent = e.message; err.hidden = false; }
-    });
-    $("#adminClear").addEventListener("click", () => {
-      localStorage.removeItem(ADMIN_KEY);
-      $("#adminKeyInput").value = "";
-      $("#adminPanel").hidden = true;
-      toast("已清除本地密钥");
-    });
-    $("#adminApply").addEventListener("click", async () => {
-      const key = localStorage.getItem(ADMIN_KEY) || $("#adminKeyInput").value.trim();
-      const code = normalizeCode($("#adminCodeInput").value);
-      if (!code) { toast("先填邀请码", true); return; }
-      try {
-        const found = await api.adminFind(code, key);
-        const remaining = $("#adminRemaining").value === "" ? null : parseInt($("#adminRemaining").value, 10);
-        const position = $("#adminPosition").value === "" ? null : parseInt($("#adminPosition").value, 10);
-        const status = $("#adminStatus").value || null;
-        await api.adminUpdate(found.card.id, key, { remaining, position, status });
-        toast("已更新：" + code);
-        await load();
-      } catch (e) { toast(e.message, true); }
-    });
-    $("#adminReseed").addEventListener("click", async () => {
-      const key = localStorage.getItem(ADMIN_KEY) || $("#adminKeyInput").value.trim();
-      try {
-        await api.adminReseed(key);
-        toast("顺位已重排为 1..N");
-        await load();
-      } catch (e) { toast(e.message, true); }
-    });
-
     // 反馈
     $("#feedbackClose").addEventListener("click", () => ($("#feedbackModal").hidden = true));
     $("#feedbackCancel").addEventListener("click", () => ($("#feedbackModal").hidden = true));
@@ -653,19 +598,6 @@
 
     document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
     setInterval(() => { if (!document.hidden) load(); }, 20000);
-  }
-
-  function openAdmin() {
-    const key = localStorage.getItem(ADMIN_KEY);
-    $("#adminKeyInput").value = key || "";
-    $("#adminPanel").hidden = !key;
-    $("#adminError").hidden = true;
-    $("#adminModal").hidden = false;
-    if (key) {
-      api.adminVerify(key)
-        .then(() => { $("#adminPanel").hidden = false; })
-        .catch(() => { $("#adminPanel").hidden = true; });
-    }
   }
 
   /* ---------------------------------------------------------- 启动 */

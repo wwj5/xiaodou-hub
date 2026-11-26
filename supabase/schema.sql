@@ -487,18 +487,27 @@ begin
   end if;
 
   v_remain := coalesce(p_remaining, v_row.remaining_spots);
-  v_status := coalesce(nullif(p_status, ''), v_row.status);
 
   if v_remain < 0 or v_remain > 30 then
     raise exception '剩余次数只能是 0–30' using errcode = 'P0001';
   end if;
-  if v_status not in ('available', 'used', 'expired') then
-    raise exception '状态不合法' using errcode = 'P0001';
-  end if;
-  if v_remain = 0 and v_status = 'available' then
-    v_status := 'used';
-  elsif v_remain > 0 and v_status <> 'available' then
-    v_status := 'available';
+
+  -- 显式传状态就照做（下架用的就是这条），没传才按剩余次数推断
+  if p_status is not null and length(trim(p_status)) > 0 then
+    v_status := trim(p_status);
+    if v_status not in ('available', 'used', 'expired') then
+      raise exception '状态不合法' using errcode = 'P0001';
+    end if;
+    if v_status = 'available' and v_remain = 0 then
+      v_status := 'used';
+    end if;
+  else
+    v_status := v_row.status;
+    if v_remain = 0 then
+      v_status := 'used';
+    elsif v_status = 'used' then
+      v_status := 'available';
+    end if;
   end if;
 
   if p_position is not null then
@@ -549,6 +558,116 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------- RPC：管理后台（列表 / 删除 / 举报）
+
+create or replace function public.admin_list(
+  p_key    text,
+  p_status text default 'all',
+  p_limit  integer default 500
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text := coalesce(nullif(trim(p_status), ''), 'all');
+  v_limit  integer := least(greatest(coalesce(p_limit, 500), 1), 500);
+  v_cards  json;
+  v_reports json;
+begin
+  perform public.hub_require_admin(p_key);
+
+  select coalesce(json_agg(t.card order by t.queue_rank asc, t.created_at asc), '[]'::json)
+    into v_cards
+    from (
+      select public.hub_card_full(c) as card, c.queue_rank, c.created_at
+        from public.invite_codes c
+       where (case v_status
+                when 'available' then c.status = 'available'
+                when 'closed'    then c.status <> 'available'
+                else true
+              end)
+       limit v_limit
+    ) t;
+
+  select coalesce(json_agg(json_build_object(
+           'id',          f.id,
+           'codeId',      f.code_id,
+           'code',        f.code,
+           'reason',      f.reason,
+           'note',        f.note,
+           'resolved',    f.resolved,
+           'createdAt',   f.created_at
+         ) order by f.created_at desc), '[]'::json)
+    into v_reports
+    from public.feedback f
+   where f.resolved = false
+   limit 100;
+
+  return json_build_object(
+    'ok', true,
+    'cards', v_cards,
+    'reports', v_reports,
+    'stats', public.hub_stats(),
+    'today', json_build_object(
+      'reveals', (select count(*) from public.reports r
+                   where r.action = 'reveal'
+                     and ((r.created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today()),
+      'publishes', (select count(*) from public.publish_log p
+                     where ((p.created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today()),
+      'newCodes', (select count(*) from public.invite_codes c
+                    where ((c.created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today())
+    )
+  );
+end;
+$$;
+
+create or replace function public.admin_delete_code(p_id uuid, p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  perform pg_advisory_xact_lock(778899);
+
+  delete from public.invite_codes where id = p_id;
+  if not found then
+    raise exception '邀请码不存在' using errcode = 'P0001';
+  end if;
+
+  update public.invite_codes c
+     set queue_rank = s.rn, updated_at = now()
+    from (select id, row_number() over (order by queue_rank, created_at) as rn
+            from public.invite_codes) s
+   where c.id = s.id;
+
+  return json_build_object('ok', true, 'stats', public.hub_stats());
+end;
+$$;
+
+create or replace function public.admin_resolve_report(
+  p_id      bigint,
+  p_key     text,
+  p_resolve boolean default true
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  update public.feedback set resolved = coalesce(p_resolve, true) where id = p_id;
+  if not found then
+    raise exception '这条举报不存在' using errcode = 'P0001';
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
 -- ---------------------------------------------------------------- 函数授权
 
 revoke all on function public.hub_stats() from public;
@@ -560,6 +679,9 @@ revoke all on function public.admin_verify(text) from public;
 revoke all on function public.admin_find(text, text) from public;
 revoke all on function public.admin_update(uuid, text, integer, integer, text) from public;
 revoke all on function public.admin_reseed(text) from public;
+revoke all on function public.admin_list(text, text, integer) from public;
+revoke all on function public.admin_delete_code(uuid, text) from public;
+revoke all on function public.admin_resolve_report(bigint, text, boolean) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -570,3 +692,6 @@ grant execute on function public.admin_verify(text) to anon, authenticated;
 grant execute on function public.admin_find(text, text) to anon, authenticated;
 grant execute on function public.admin_update(uuid, text, integer, integer, text) to anon, authenticated;
 grant execute on function public.admin_reseed(text) to anon, authenticated;
+grant execute on function public.admin_list(text, text, integer) to anon, authenticated;
+grant execute on function public.admin_delete_code(uuid, text) to anon, authenticated;
+grant execute on function public.admin_resolve_report(bigint, text, boolean) to anon, authenticated;

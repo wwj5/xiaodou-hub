@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>管理后台 · 小豆互助站</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
+<link rel="stylesheet" href="styles.css?v=6" />
+<style>
+  .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
+  .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .adm-head h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .adm-back { font-size: 13px; color: var(--muted); text-decoration: none; }
+  .adm-back:hover { color: var(--blue); }
+  .adm-gate { max-width: 460px; margin: 12vh auto 0; background: #fff; border: 1px solid var(--line);
+              border-radius: 16px; padding: 26px; box-shadow: 0 20px 50px -34px rgba(15, 30, 60, .45); }
+  .adm-gate h2 { font-size: 17px; margin: 0 0 6px; }
+  .adm-gate p { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.6; }
+  .adm-gate input { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px;
+                    font-size: 14px; font-family: inherit; }
+  .adm-gate input:focus { outline: 2px solid rgba(37, 99, 235, .18); border-color: var(--blue); }
+  .adm-gate .primary-btn { margin-top: 14px; width: 100%; }
+  .adm-err { color: #c0392b; font-size: 12.5px; margin-top: 10px; }
+  .adm-panel[hidden] { display: none; }
+  .adm-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .adm-stat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .adm-stat span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .adm-stat b { font-size: 22px; font-weight: 700; }
+  .adm-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .adm-tab { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
+             padding: 6px 12px; border-radius: 999px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  .adm-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .adm-bar .adm-refresh { margin-left: auto; }
+  .adm-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px;
+               overflow: hidden; box-shadow: 0 1px 0 rgba(15, 30, 60, .04); font-size: 13px; }
+  .adm-table th, .adm-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  .adm-table th { background: #f6f8fc; font-weight: 600; color: #33415c; white-space: nowrap; }
+  .adm-table code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: .04em; }
+  .adm-empty { padding: 26px; text-align: center; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 12px; }
+  .adm-tag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .adm-tag.available { background: #e6f6ea; color: #1e7c3c; }
+  .adm-tag.used, .adm-tag.expired { background: #f1f1f3; color: #6b7280; }
+  .adm-act { display: flex; gap: 6px; flex-wrap: wrap; }
+  .adm-mini { appearance: none; border: 1px solid var(--line); background: #fff; border-radius: 7px;
+              padding: 3px 9px; font-size: 12px; font-family: inherit; color: #33415c; cursor: pointer; }
+  .adm-mini:hover { border-color: var(--blue); color: var(--blue); }
+  .adm-mini.danger:hover { border-color: #c0392b; color: #c0392b; }
+  .adm-sec { margin-top: 26px; }
+  .adm-sec h2 { font-size: 15px; margin: 0 0 4px; }
+  .adm-sec p.hint { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .adm-report { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+                margin-bottom: 8px; font-size: 13px; }
+  .adm-report .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .adm-report .reason { color: #c0392b; font-weight: 600; }
+  .adm-report .note { color: var(--muted); margin-top: 6px; line-height: 1.6; }
+  @media (max-width: 760px) {
+    .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+<div class="adm-wrap">
+  <div class="adm-head">
+    <h1>管理后台</h1>
+    <div>
+      <a class="adm-back" href="./">← 返回首页</a>
+      <button class="adm-mini adm-refresh" id="logoutBtn" type="button" hidden>退出密钥</button>
+    </div>
+  </div>
+
+  <div class="adm-gate" id="gate">
+    <h2>先贴管理密钥</h2>
+    <p>密钥只存在这台电脑的 sessionStorage 里，关掉浏览器就没了。它和首页“管理入口”用的是同一个。</p>
+    <input id="keyInput" type="password" placeholder="粘贴管理员密钥" spellcheck="false" autocomplete="off" />
+    <button class="primary-btn" id="enterBtn" type="button">进入</button>
+    <p class="adm-err" id="gateErr" hidden></p>
+  </div>
+
+  <div class="adm-panel" id="panel" hidden>
+    <div class="adm-stats">
+      <div class="adm-stat"><span>累计发放</span><b id="sIssued">–</b></div>
+      <div class="adm-stat"><span>当前可揭</span><b id="sAvailable">–</b></div>
+      <div class="adm-stat"><span>今日揭晓</span><b id="sRevealToday">–</b></div>
+      <div class="adm-stat"><span>待处理举报</span><b id="sReports">–</b></div>
+    </div>
+
+    <div class="adm-bar">
+      <button class="adm-tab on" data-status="all" type="button">全部</button>
+      <button class="adm-tab" data-status="available" type="button">可揭晓</button>
+      <button class="adm-tab" data-status="closed" type="button">已用完 / 已下架</button>
+      <button class="adm-mini adm-refresh" id="reloadBtn" type="button">重载</button>
+    </div>
+
+    <table class="adm-table" id="codeTable">
+      <thead>
+        <tr>
+          <th>邀请码</th><th>状态</th><th>剩余 / 总</th><th>顺位</th><th>已揭</th><th>发布时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="codeBody"></tbody>
+    </table>
+    <div class="adm-empty" id="codeEmpty" hidden>这个筛选下没有码。</div>
+
+    <div class="adm-sec">
+      <h2>待处理举报 <span id="reportCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
+      <div id="reportList"></div>
+      <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+  const CFG = Object.assign({ supabaseUrl: "", supabaseKey: "" }, window.HUB_CONFIG || {});
+  const KEY_STORE = "xd:admin:key";
+  const $ = (s) => document.querySelector(s);
+  let listKey = sessionStorage.getItem(KEY_STORE) || "";
+  let status = "all";
+  let cards = [];
+
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+
+  async function rpc(fn, body) {
+    const res = await fetch(CFG.supabaseUrl + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: CFG.supabaseKey,
+        Authorization: "Bearer " + CFG.supabaseKey,
+      },
+      body: JSON.stringify(body || {}),
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (!res.ok) throw new Error((data && (data.message || data.hint)) || ("请求失败 " + res.status));
+    return data;
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "–";
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, "0");
+    return (d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function renderStats(data) {
+    $("#sIssued").textContent = data.stats.issued;
+    $("#sAvailable").textContent = data.stats.available;
+    $("#sRevealToday").textContent = data.today.reveals;
+    $("#sReports").textContent = data.reports.length;
+    $("#reportCount").textContent = data.reports.length ? "（" + data.reports.length + "）" : "";
+  }
+
+  function renderCodes() {
+    const body = $("#codeBody");
+    $("#codeEmpty").hidden = cards.length > 0;
+    body.innerHTML = cards.map((c) => {
+      const st = c.status === "available" ? "available" : c.status;
+      const label = c.status === "available" ? "可揭晓" : (c.status === "expired" ? "已下架" : "已用完");
+      return "<tr>" +
+        "<td><code>" + esc(c.code) + "</code></td>" +
+        '<td><span class="adm-tag ' + esc(st) + '">' + label + "</span></td>" +
+        "<td>" + c.remainingSpots + " / " + c.totalSpots + "</td>" +
+        "<td>" + c.queueRank + "</td>" +
+        "<td>" + c.claimedCount + "</td>" +
+        "<td>" + fmtTime(c.createdAt) + "</td>" +
+        '<td><div class="adm-act">' +
+          (c.status === "available"
+            ? '<button class="adm-mini" data-act="down" data-id="' + c.id + '">下架</button>'
+            : '<button class="adm-mini" data-act="up" data-id="' + c.id + '">恢复</button>') +
+          '<button class="adm-mini" data-act="top" data-id="' + c.id + '">置顶</button>' +
+          '<button class="adm-mini danger" data-act="del" data-id="' + c.id + '">删除</button>' +
+        "</div></td></tr>";
+    }).join("");
+  }
+
+  const REASON = { invalid: "码无效", used: "已被别人用掉", wrong_info: "信息不对", other: "其他" };
+
+  function renderReports(reports) {
+    $("#reportEmpty").hidden = reports.length > 0;
+    $("#reportList").innerHTML = reports.map((r) => (
+      '<div class="adm-report">' +
+        '<div class="row">' +
+          '<span class="reason">' + esc(REASON[r.reason] || r.reason) + "</span>" +
+          (r.code ? "<code>" + esc(r.code) + "</code>" : "<span style='color:var(--muted)'>（未关联邀请码）</span>") +
+          "<span style='color:var(--muted);font-size:12px'>" + fmtTime(r.createdAt) + "</span>" +
+        "</div>" +
+        (r.note ? '<div class="note">' + esc(r.note) + "</div>" : "") +
+        '<div class="adm-act" style="margin-top:8px">' +
+          '<button class="adm-mini" data-rep="done" data-id="' + r.id + '">标记已处理</button>' +
+          (r.codeId ? '<button class="adm-mini danger" data-rep="down" data-code="' + r.codeId + '" data-id="' + r.id + '">下架该码并处理</button>' : "") +
+        "</div>" +
+      "</div>"
+    )).join("");
+  }
+
+  async function load() {
+    const data = await rpc("admin_list", { p_key: listKey, p_status: status, p_limit: 500 });
+    cards = data.cards || [];
+    renderStats(data);
+    renderCodes();
+    renderReports(data.reports || []);
+  }
+
+  function enter(key) {
+    listKey = key;
+    sessionStorage.setItem(KEY_STORE, key);
+    $("#panel").hidden = false;
+    $("#gate").hidden = true;
+    $("#logoutBtn").hidden = false;
+    load().catch(onFail);
+  }
+
+  function onFail(err) {
+    const box = $("#gateErr");
+    box.textContent = err.message || "加载失败";
+    box.hidden = false;
+    $("#panel").hidden = true;
+    $("#gate").hidden = false;
+    if (/密钥/.test(box.textContent)) {
+      sessionStorage.removeItem(KEY_STORE);
+      listKey = "";
+      $("#logoutBtn").hidden = true;
+    }
+  }
+
+  $("#enterBtn").addEventListener("click", async () => {
+    const key = $("#keyInput").value.trim();
+    if (!key) return;
+    $("#gateErr").hidden = true;
+    try {
+      await rpc("admin_verify", { p_key: key });
+      enter(key);
+    } catch (err) {
+      $("#gateErr").textContent = err.message || "校验失败";
+      $("#gateErr").hidden = false;
+    }
+  });
+
+  $("#keyInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#enterBtn").click();
+  });
+
+  $("#logoutBtn").addEventListener("click", () => {
+    sessionStorage.removeItem(KEY_STORE);
+    listKey = "";
+    $("#panel").hidden = true;
+    $("#gate").hidden = false;
+    $("#logoutBtn").hidden = true;
+  });
+
+  $("#reloadBtn").addEventListener("click", () => { toast("已重载"); load().catch(onFail); });
+
+  document.querySelectorAll(".adm-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".adm-tab").forEach((b) => b.classList.remove("on"));
+      btn.classList.add("on");
+      status = btn.dataset.status;
+      load().catch(onFail);
+    });
+  });
+
+  $("#codeBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const card = cards.find((c) => c.id === id);
+    if (!card) return;
+    try {
+      if (btn.dataset.act === "del") {
+        if (!confirm("删除 " + card.code + "？删掉后队列会重新排顺位。")) return;
+        await rpc("admin_delete_code", { p_id: id, p_key: listKey });
+        toast("已删除 " + card.code);
+      } else if (btn.dataset.act === "down") {
+        await rpc("admin_update", { p_id: id, p_key: listKey, p_status: "expired" });
+        toast("已下架 " + card.code);
+      } else if (btn.dataset.act === "up") {
+        await rpc("admin_update", { p_id: id, p_key: listKey, p_status: "available", p_remaining: 1 });
+        toast("已恢复 " + card.code);
+      } else if (btn.dataset.act === "top") {
+        await rpc("admin_update", { p_id: id, p_key: listKey, p_position: 1 });
+        toast("已置顶 " + card.code);
+      }
+      await load();
+    } catch (err) {
+      toast(err.message || "操作失败");
+    }
+  });
+
+  $("#reportList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-rep]");
+    if (!btn) return;
+    try {
+      if (btn.dataset.rep === "down") {
+        await rpc("admin_update", { p_id: btn.dataset.code, p_key: listKey, p_status: "expired" });
+      }
+      await rpc("admin_resolve_report", { p_id: Number(btn.dataset.id), p_key: listKey, p_resolve: true });
+      toast("举报已处理");
+      await load();
+    } catch (err) {
+      toast(err.message || "操作失败");
+    }
+  });
+
+  if (listKey) enter(listKey);
+  else $("#keyInput").focus();
+})();
+</script>
+</body>
+</html>
