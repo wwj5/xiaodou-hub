@@ -32,6 +32,9 @@
   .adm-bar-tight { margin-bottom: 10px; }
   .adm-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
   .adm-check input { width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer; }
+  .adm-grace { gap: 6px; }
+  .adm-grace input { width: 62px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 7px;
+                     font-size: 12.5px; font-family: inherit; color: #33415c; }
   .adm-tab { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
              padding: 6px 12px; border-radius: 999px; font-size: 13px; font-family: inherit; cursor: pointer; }
   .adm-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -142,6 +145,12 @@
       </p>
       <div class="adm-bar adm-bar-tight">
         <label class="adm-check"><input type="checkbox" id="ledgerOnly" /> 只看欠码的</label>
+        <label class="adm-check adm-grace">
+          超时未回填自动限制
+          <input id="graceInput" type="number" min="0" max="1440" step="5" />
+          分钟（0 = 关）
+          <button class="adm-mini" id="graceSave" type="button">保存</button>
+        </label>
         <div class="adm-right">
           <button class="adm-mini" id="ledgerReload" type="button">刷新账本</button>
           <button class="adm-mini" id="ledgerExport" type="button">导出 CSV</button>
@@ -326,6 +335,28 @@
 
   let ledger = [];
 
+  async function loadGrace() {
+    try {
+      const s = await rpc("admin_settings", { p_key: listKey });
+      if (!s) return;
+      $("#graceInput").value = s.graceMinutes != null ? s.graceMinutes : 5;
+    } catch (err) { onFail(err); }
+  }
+
+  $("#graceSave").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const n = Number($("#graceInput").value);
+    if (!isFinite(n) || n < 0 || n > 1440) { toast("分钟数要在 0–1440 之间"); return; }
+    btn.disabled = true;
+    try {
+      const res = await rpc("admin_set_autoblock", { p_key: listKey, p_minutes: Math.round(n) });
+      toast(n > 0 ? "已设为 " + res.graceMinutes + " 分钟内必须回填" : "已关闭超时自动限制");
+      await load();
+    } catch (err) {
+      toast(err.message || "保存失败");
+    } finally { btn.disabled = false; }
+  });
+
   async function loadLedger() {
     try {
       const rows = await rpc("admin_ledger", {
@@ -341,7 +372,7 @@
   }
 
   function ledgerState(r) {
-    if (r.blocked) return '<span class="adm-tag expired">已限制</span>';
+    if (r.blocked) return '<span class="adm-tag expired">' + (r.blockKind === "auto" ? "超时限制" : "已限制") + "</span>";
     if (r.pending > 0) return '<span class="adm-tag used">欠 ' + r.pending + " 个</span>";
     return '<span class="adm-tag available">正常</span>';
   }
@@ -441,6 +472,7 @@
     $("#logoutBtn").hidden = false;
     $("#passBtn").hidden = false;
     load().catch(onFail);
+    loadGrace();
   }
 
   function backToGate(msg) {
@@ -553,6 +585,7 @@
       btn.classList.add("on");
       status = btn.dataset.status;
       load().catch(onFail);
+    loadGrace();
     });
   });
 
@@ -622,4 +655,5 @@
 </script>
 </body>
 </html>
+
 

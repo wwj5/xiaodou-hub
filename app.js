@@ -450,8 +450,12 @@
     if (!strip) return;
     strip.hidden = pending <= 0;
     if (pending > 0) {
+      const mins = Number(state.stats && state.stats.graceMinutes);
+      const tail = mins > 0
+        ? "超过 " + mins + " 分钟没放回来，这台设备会被自动限制，放回后自动解除。"
+        : "先把你的邀请码放回来，才能接下一个。";
       $("#relayText").textContent =
-        "你从池子里接过 " + pending + " 个码还没还。先把你的邀请码放回来，才能接下一个。";
+        "你从池子里接过 " + pending + " 个码还没还。" + tail;
     }
   }
 
@@ -545,6 +549,14 @@
       relayBump(+1);
       renderRelay();
       $("#relayCode").textContent = res.code;
+      const mins2 = Number(state.stats && state.stats.graceMinutes);
+      const note = $("#relayNote");
+      if (note) {
+        note.innerHTML = mins2 > 0
+          ? "免费纯接力：码是别人接给你的，不是卖的。请在 <b>" + mins2 + " 分钟</b>内把自己的邀请码放回池子，"
+            + "超时这台设备会被自动限制（放回后立即解除）。"
+          : "免费纯接力：码是别人接给你的，不是卖的。等你自己的邀请码下来了，也放回池子里，下一个人才能接得上。";
+      }
       $("#relayModal").hidden = false;
       await load();
     } catch (e) {

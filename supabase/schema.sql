@@ -61,15 +61,25 @@ create index if not exists ix_feedback_time on public.feedback (visitor_hash, cr
 create table if not exists public.app_settings (
   id               boolean primary key default true check (id),
   admin_token_hash text not null,
+  -- 超时未回填自动限制：拿到码多少分钟内没放回自己的码，就自动限制这台设备（0 = 关闭）
+  autoblock_minutes integer not null default 5 check (autoblock_minutes between 0 and 1440),
   updated_at       timestamptz not null default now()
 );
 
+-- 兼容老库：补上超时限制字段
+alter table public.app_settings
+  add column if not exists autoblock_minutes integer not null default 5;
+
 -- 拉黑名单：只按设备指纹，不记 IP、不记个人身份信息
+-- kind: manual = 管理员手动限制；auto = 超时未回填自动限制（回填后会自动解除）
 create table if not exists public.visitor_blocks (
   visitor_hash text primary key,
   note         text,
+  kind         text not null default 'manual',
   created_at   timestamptz not null default now()
 );
+alter table public.visitor_blocks
+  add column if not exists kind text not null default 'manual';
 
 -- ---------------------------------------------------------------- 权限：表一律不可直连
 
@@ -107,6 +117,71 @@ as $$
   select ((now() at time zone 'UTC') + interval '8 hours')::date;
 $$;
 
+-- 超时未回填的宽限分钟数（0 = 关闭自动限制）
+create or replace function public.hub_grace_minutes()
+returns integer
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce((select autoblock_minutes from public.app_settings where id = true), 5);
+$$;
+
+-- 超时未回填 → 自动把该设备指纹写进限制名单；回填后由 publish_code 自动解除
+-- 判定口径：拿到的码数 > 已放回数，且"第一笔没被回填抵消的那次揭晓"已经超过宽限时间
+create or replace function public.hub_autoblock(p_visitor text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_min   integer := public.hub_grace_minutes();
+  v_taken integer;
+  v_ret   integer;
+  v_old   timestamptz;
+begin
+  if v_min is null or v_min <= 0 then
+    return false;
+  end if;
+  if exists (select 1 from public.visitor_blocks where visitor_hash = p_visitor) then
+    return true;
+  end if;
+
+  select count(*) into v_taken
+    from public.reports r
+    join public.invite_codes c on c.id = r.code_id
+   where r.visitor_hash = p_visitor and r.action = 'reveal' and c.status <> 'expired';
+  select count(*) into v_ret
+    from public.invite_codes
+   where creator_hash = p_visitor and status <> 'expired';
+
+  if v_taken <= v_ret then
+    return false;
+  end if;
+
+  -- 已回填 k 个，就抵掉最早的 k 次揭晓；第 k+1 次揭晓的时间才是真正的截止起点
+  select t.created_at into v_old
+    from (
+      select r.created_at, row_number() over (order by r.created_at) as rn
+        from public.reports r
+        join public.invite_codes c on c.id = r.code_id
+       where r.visitor_hash = p_visitor and r.action = 'reveal' and c.status <> 'expired'
+    ) t
+   where t.rn = v_ret + 1;
+
+  if v_old is not null and v_old < now() - make_interval(mins => v_min) then
+    insert into public.visitor_blocks (visitor_hash, note, kind)
+    values (p_visitor, '超时 ' || v_min || ' 分钟未回填，自动限制', 'auto')
+    on conflict (visitor_hash) do nothing;
+    return true;
+  end if;
+
+  return false;
+end;
+$$;
+
 create or replace function public.hub_stats()
 returns json
 language sql
@@ -136,7 +211,9 @@ as $$
            group by 1
         ) b on b.vh = a.vh
        where a.n > coalesce(b.n, 0)
-    )
+    ),
+    -- 超时未回填的宽限分钟（前端用来提示"多久内必须放回"）
+    'graceMinutes',   public.hub_grace_minutes()
   );
 $$;
 
@@ -243,6 +320,8 @@ begin
     ) t;
 
   -- 接力状态：接过多少（只算码还在池子里的）、放回多少（未被下架的）
+  perform public.hub_autoblock(v_hash);
+
   select count(*) into v_taken
     from public.reports r
     join public.invite_codes c on c.id = r.code_id
@@ -273,7 +352,10 @@ begin
       'taken', v_taken,
       'returned', v_return,
       'pending', greatest(0, v_taken - v_return),
-      'blocked', v_taken >= v_return + 1
+      'blocked', (v_taken >= v_return + 1) or exists (
+        select 1 from public.visitor_blocks b where b.visitor_hash = v_hash
+      ),
+      'graceMinutes', public.hub_grace_minutes()
     )
   );
 end;
@@ -338,6 +420,10 @@ begin
 
   insert into public.publish_log (visitor_hash, code_id) values (v_visitor, v_row.id);
 
+  -- 回填了就自动解除"超时未回填"的限制；管理员手动限制的不动
+  delete from public.visitor_blocks
+   where visitor_hash = v_visitor and kind = 'auto';
+
   return json_build_object(
     'ok', true,
     'card', public.hub_card_public(v_row),
@@ -366,9 +452,13 @@ declare
   v_hourly   integer;
   v_remaining integer;
 begin
+  -- 先把超时未回填的设备自动限制掉（回填后会自动解除）
+  perform public.hub_autoblock(v_visitor);
+
   -- 被管理员限制的设备：直接拒掉，先把欠的码还上
   if exists (select 1 from public.visitor_blocks where visitor_hash = v_visitor) then
-    raise exception '这个设备被管理员限制了揭晓：先把欠下的邀请码还回来' using errcode = 'P0001';
+    raise exception '这台设备已被限制揭晓：拿到码 % 分钟内没回填就会锁，先把自己的邀请码放回来（放回后自动解锁）',
+      public.hub_grace_minutes() using errcode = 'P0001';
   end if;
 
   select * into v_row from public.invite_codes where id = p_id for update;
@@ -827,6 +917,7 @@ begin
              greatest(coalesce(rv.last_rev, to_timestamp(0)),
                       coalesce(pb.last_pub, to_timestamp(0))) as last_at,
              b.visitor_hash is not null as blocked,
+             coalesce(b.kind, '') as block_kind,
              b.note
         from v
         left join rv on rv.vh = v.vh
@@ -842,6 +933,7 @@ begin
                'pending', a.pending,
                'lastAt',  case when a.last_at = to_timestamp(0) then null else a.last_at end,
                'blocked', a.blocked,
+               'blockKind', a.block_kind,
                'note',    a.note
              )
              order by a.pending desc, a.last_at desc
@@ -964,6 +1056,36 @@ begin
 end;
 $$;
 
+create or replace function public.admin_settings(p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  return json_build_object('graceMinutes', public.hub_grace_minutes());
+end;
+$$;
+
+create or replace function public.admin_set_autoblock(p_key text, p_minutes integer)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  if p_minutes is null or p_minutes < 0 or p_minutes > 1440 then
+    raise exception '分钟数要在 0–1440 之间（0 = 关闭自动限制）' using errcode = 'P0001';
+  end if;
+  update public.app_settings
+     set autoblock_minutes = p_minutes, updated_at = now()
+   where id = true;
+  return json_build_object('ok', true, 'graceMinutes', p_minutes);
+end;
+$$;
+
 -- ---------------------------------------------------------------- 函数授权
 
 revoke all on function public.hub_stats() from public;
@@ -983,6 +1105,8 @@ revoke all on function public.admin_set_key(text, text) from public;
 revoke all on function public.admin_ledger(text, integer, boolean) from public;
 revoke all on function public.admin_block(text, text, text) from public;
 revoke all on function public.admin_unblock(text, text) from public;
+revoke all on function public.admin_settings(text) from public;
+revoke all on function public.admin_set_autoblock(text, integer) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -1001,4 +1125,8 @@ grant execute on function public.admin_set_key(text, text) to anon, authenticate
 grant execute on function public.admin_ledger(text, integer, boolean) to anon, authenticated;
 grant execute on function public.admin_block(text, text, text) to anon, authenticated;
 grant execute on function public.admin_unblock(text, text) to anon, authenticated;
+grant execute on function public.admin_settings(text) to anon, authenticated;
+grant execute on function public.admin_set_autoblock(text, integer) to anon, authenticated;
+
+
 
