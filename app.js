@@ -703,5 +703,32 @@
   });
   showNotice();
 
+  /* ---------------------------------------------------------- 说明弹窗 */
+
+  function openHow() {
+    const box = $("#howModal");
+    if (box) box.hidden = false;
+  }
+
+  function closeHow() {
+    const box = $("#howModal");
+    if (box) box.hidden = true;
+  }
+
+  $("#howOpen").addEventListener("click", openHow);
+  $("#howOpenTop").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
+  $("#footAbout").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
+  $("#footHow").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
+  $("#footDisclaimer").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
+  $("#howClose").addEventListener("click", closeHow);
+  $("#howOk").addEventListener("click", closeHow);
+  $("#howGo").addEventListener("click", () => {
+    closeHow();
+    openShare();
+  });
+  $("#howModal").addEventListener("click", (e) => {
+    if (e.target.id === "howModal") closeHow();
+  });
+
   load();
 })();

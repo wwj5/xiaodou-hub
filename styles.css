@@ -522,7 +522,11 @@ input::placeholder { color: var(--muted-2); }
 
 .rules { margin-top: 34px; }
 .rules h2 { margin: 0 0 8px; font-size: 18px; }
-.rules-intro { margin: 0 0 18px; font-size: 13px; color: var(--muted); line-height: 1.75; }
+.rules-intro { margin: 0 0 16px; font-size: 13px; color: var(--muted); line-height: 1.75; }
+.rules-open { margin-bottom: 4px; }
+.modal-card.how { width: min(640px, 100%); }
+.how-cols { display: grid; gap: 12px; margin: 14px 0 12px; }
+@media (min-width: 640px) { .how-cols { grid-template-columns: 1fr 1fr; align-items: start; } }
 .rules-block { padding: 16px 20px; border-radius: var(--radius); border: 1px solid var(--line);
                background: var(--surface); }
 .rules-block + .rules-block { margin-top: 12px; }
