@@ -32,8 +32,9 @@
       <p class="eyebrow">社区互助 · 先到先得</p>
       <h1>小豆邀请码<br /><span>互助站</span></h1>
       <p class="lede">
-        手里多出来的邀请码放进来，需要的人自己取走。队列按发布顺序排，
-        队首优先展示；每被领走一个，剩余次数自动减一，减到 0 自动下架。
+        手里多出来的邀请码放进来，队列按发布顺序排、队首优先展示。
+        列表里只显示遮罩，点「揭晓」才拿到明文；揭晓那一刻就标记为已领取，
+        每人每天最多揭晓 2 个，所以码不会挂在明面上被脚本秒扫。
       </p>
       <div class="hero-badge">
         <span class="dot" id="heroDot"></span>
@@ -47,14 +48,14 @@
         <small>条邀请码</small>
       </div>
       <div class="stat highlight">
-        <label>当前可领取</label>
+        <label>当前可揭晓</label>
         <b id="statAvailable">—</b>
-        <small>条可用</small>
+        <small>条待揭</small>
       </div>
       <div class="stat">
-        <label>可用次数</label>
+        <label>已揭晓</label>
         <b id="statSpots">—</b>
-        <small>次剩余</small>
+        <small>次揭晓</small>
       </div>
     </div>
   </section>
@@ -75,12 +76,24 @@
     <div class="perf"></div>
     <div class="passport-foot">
       <div class="passport-actions">
-        <button class="primary-btn" id="passportCopy" type="button">复制邀请码</button>
-        <button class="line-btn" id="passportClaim" type="button">我已用掉一个（-1）</button>
+        <button class="primary-btn" id="passportReveal" type="button">点击揭晓</button>
+        <button class="line-btn" id="passportCopy" type="button" disabled>复制邀请码</button>
         <button class="line-btn" id="passportFeedback" type="button">反馈问题</button>
       </div>
-      <span class="quota-hint" id="quotaHint">今日领取名额：—</span>
+      <span class="quota-hint" id="quotaHint">今日揭晓名额：—</span>
     </div>
+    <p class="reveal-note">揭晓后自动标记为已领取，请到小豆官方页面兑换。</p>
+  </section>
+
+  <section class="share-card" id="myCodesCard" hidden>
+    <div class="share-head">
+      <div>
+        <h2>我揭晓到的码</h2>
+        <p>只存在你这个浏览器里，换设备、清缓存就没了，建议复制到别处保存。</p>
+      </div>
+      <span class="share-tip">本机记录</span>
+    </div>
+    <div class="mine-list" id="myCodes"></div>
   </section>
 
   <section class="share-card">
@@ -110,8 +123,8 @@
       <h2>队列</h2>
       <div class="queue-tools">
         <div class="segmented" id="filter">
-          <button type="button" data-status="available" class="active">可用</button>
-          <button type="button" data-status="used">已用完</button>
+          <button type="button" data-status="available" class="active">可揭晓</button>
+          <button type="button" data-status="used">已揭晓</button>
           <button type="button" data-status="all">全部</button>
         </div>
         <div class="search">

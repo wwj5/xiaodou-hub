@@ -1,7 +1,6 @@
-/* 小豆邀请码互助站 · 前端逻辑
- * 两种后端模式：
- *   1) remote —— 配置了 Supabase URL + anon key，数据全站共享（正式用法）
- *   2) demo   —— 没配置时自动降级为浏览器 localStorage，只在你自己这一个浏览器里可见
+/* 小豆邀请码互助站 · 前端逻辑（揭晓制）
+ * remote —— 配置了 Supabase，数据全站共享；列表永不含明文，只有 reveal 才出码
+ * demo   —— 未配置时降级为浏览器 localStorage，语义与远端一致，方便先看效果
  */
 
 (function () {
@@ -14,7 +13,7 @@
       codeMinLen: 4,
       codeMaxLen: 32,
       maxSpots: 30,
-      maxClaims: 2,
+      dailyReveals: 2,
       maxPublish: 1,
     },
     window.HUB_CONFIG || {}
@@ -23,11 +22,12 @@
   const MODE = CFG.supabaseUrl && CFG.supabaseKey ? "remote" : "demo";
 
   const $ = (sel) => document.querySelector(sel);
-  const tokenKey = "xd:visitor";
-  const adminKeyStore = "xd:admin";
-  const demoStore = "xd:demo:v1";
+  const TOKEN_KEY = "xd:visitor";
+  const ADMIN_KEY = "xd:admin";
+  const MINE_KEY = "xd:mymask";     // 只本地保存"我揭晓到的码"
+  const DEMO_KEY = "xd:demo:v2";
 
-  /* ------------------------------------------------------------ 通用工具 */
+  /* ------------------------------------------------------------ 工具 */
 
   function esc(str) {
     return String(str == null ? "" : str).replace(/[&<>"']/g, (c) => (
@@ -36,16 +36,21 @@
   }
 
   function visitorToken() {
-    let t = localStorage.getItem(tokenKey);
+    let t = localStorage.getItem(TOKEN_KEY);
     if (!t) {
-      t = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()) + Date.now().toString(36);
-      localStorage.setItem(tokenKey, t);
+      t = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()) +
+          Date.now().toString(36);
+      localStorage.setItem(TOKEN_KEY, t);
     }
     return t;
   }
 
   function normalizeCode(raw) {
     return String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  function beijingDate() {
+    return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   }
 
   function timeAgo(iso) {
@@ -69,7 +74,7 @@
     toastTimer = setTimeout(() => {
       el.classList.remove("show");
       setTimeout(() => { el.hidden = true; }, 260);
-    }, 2200);
+    }, 2400);
   }
 
   async function copyText(text) {
@@ -91,12 +96,30 @@
   }
 
   function fail(msg) {
-    const err = new Error(msg);
-    err.isApi = true;
-    return err;
+    const e = new Error(msg);
+    e.isApi = true;
+    return e;
   }
 
-  /* ------------------------------------------------------------ 远端后端（Supabase） */
+  /* 我揭晓到的码：本地缓存 */
+  const mine = {
+    all() {
+      try { return JSON.parse(localStorage.getItem(MINE_KEY) || "{}"); } catch (e) { return {}; }
+    },
+    has(id) { return !!this.all()[id]; },
+    get(id) { return this.all()[id] || null; },
+    add(id, code) {
+      const m = this.all();
+      m[id] = { code, at: new Date().toISOString() };
+      // 只留最近 50 条
+      const keys = Object.keys(m).sort((a, b) => (m[a].at < m[b].at ? 1 : -1));
+      const trimmed = {};
+      keys.slice(0, 50).forEach((k) => { trimmed[k] = m[k]; });
+      localStorage.setItem(MINE_KEY, JSON.stringify(trimmed));
+    },
+  };
+
+  /* ------------------------------------------------------------ 远端（Supabase） */
 
   function sbBase() {
     return String(CFG.supabaseUrl).trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
@@ -116,200 +139,175 @@
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
     if (!res.ok) {
-      const msg = (data && (data.message || data.hint)) || "请求失败（HTTP " + res.status + "）";
-      throw fail(msg);
+      throw fail((data && (data.message || data.hint)) || "请求失败（HTTP " + res.status + "）");
     }
     return data;
   }
 
-  /* ------------------------------------------------------------ 演示后端（localStorage） */
+  /* ------------------------------------------------------------ 演示后端 */
 
   const demo = {
     read() {
-      let raw = localStorage.getItem(demoStore);
+      let raw = localStorage.getItem(DEMO_KEY);
       if (!raw) {
         const now = new Date().toISOString();
-        const seed = [
-          { id: "seed-3", code: "XD2026A", status: "available", totalSpots: 5, remainingSpots: 3, claimedCount: 2, queueRank: 1, createdAt: now },
-          { id: "seed-2", code: "XIAODOU7", status: "used", totalSpots: 2, remainingSpots: 0, claimedCount: 2, queueRank: 2, createdAt: now },
-        ];
-        raw = JSON.stringify({ codes: seed, claims: {}, reports: [], seq: 3 });
-        localStorage.setItem(demoStore, raw);
+        raw = JSON.stringify({
+          codes: [
+            { id: "seed-1", code: "XD2026AB", status: "available", totalSpots: 5, remainingSpots: 3,
+              claimedCount: 2, queueRank: 1, createdAt: now, creator: "seed" },
+            { id: "seed-2", code: "XIAODOU7", status: "used", totalSpots: 2, remainingSpots: 0,
+              claimedCount: 2, queueRank: 2, createdAt: now, creator: "seed" },
+          ],
+          reveals: {},   // token -> {date, n}
+          reports: {},   // token|id -> true
+          seq: 2,
+        });
+        localStorage.setItem(DEMO_KEY, raw);
       }
       return JSON.parse(raw);
     },
-    write(state) {
-      localStorage.setItem(demoStore, JSON.stringify(state));
-    },
-    stats(state) {
-      const available = state.codes.filter((c) => c.status === "available");
+    write(s) { localStorage.setItem(DEMO_KEY, JSON.stringify(s)); },
+    stats(s) {
+      const avail = s.codes.filter((c) => c.status === "available");
       return {
-        issued: state.codes.length,
-        available: available.length,
-        used: state.codes.length - available.length,
-        availableSpots: available.reduce((s, c) => s + c.remainingSpots, 0),
+        issued: s.codes.length,
+        available: avail.length,
+        revealed: s.codes.length - avail.length,
+        revealedCount: s.codes.reduce((n, c) => n + (c.claimedCount || 0), 0),
+        availableSpots: avail.reduce((n, c) => n + c.remainingSpots, 0),
       };
     },
-    card(c, token) {
+    publicCard(c) {
       return {
         id: c.id,
-        code: c.code,
+        mask: "•".repeat(Math.max(4, c.code.length)),
         status: c.status,
         totalSpots: c.totalSpots,
         remainingSpots: c.remainingSpots,
         claimedCount: c.claimedCount,
         queueRank: c.queueRank,
         createdAt: c.createdAt,
-        mine: c.creator === token,
       };
     },
+    quota(token, s) {
+      const rec = s.reveals[token];
+      const today = beijingDate();
+      const used = rec && rec.date === today ? rec.n : 0;
+      return { remaining: Math.max(0, CFG.dailyReveals - used), limit: CFG.dailyReveals, resetAt: "北京时间 00:00" };
+    },
     async list(status, q, token) {
-      const state = this.read();
+      const s = this.read();
       const norm = normalizeCode(q);
-      let rows = state.codes.slice();
+      let rows = s.codes.slice();
       if (status === "available") rows = rows.filter((c) => c.status === "available");
       else if (status === "used") rows = rows.filter((c) => c.status !== "available");
       if (norm) rows = rows.filter((c) => c.code.includes(norm));
       rows.sort((a, b) => a.queueRank - b.queueRank);
-      return { ok: true, cards: rows.map((c) => this.card(c, token)), stats: this.stats(state) };
-    },
-    async codesOfVisitor(token) {
-      const state = this.read();
-      const used = state.claims[token] || 0;
       return {
         ok: true,
-        quotaRemaining: Math.max(0, CFG.maxClaims - used),
-        myCodes: state.codes.filter((c) => c.creator === token && c.status === "available").map((c) => this.card(c, token)),
+        cards: rows.map((c) => this.publicCard(c)),
+        stats: this.stats(s),
+        quota: this.quota(token, s),
       };
     },
     async publish(code, spots, token) {
-      const state = this.read();
+      const s = this.read();
       const norm = normalizeCode(code);
-      if (norm.length < CFG.codeMinLen || norm.length > CFG.codeMaxLen) throw fail("邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字");
+      if (norm.length < CFG.codeMinLen || norm.length > CFG.codeMaxLen) {
+        throw fail("邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字");
+      }
       if (spots < 1 || spots > CFG.maxSpots) throw fail("剩余次数必须是 1–30 的整数");
-      if (state.codes.some((c) => c.code === norm)) throw fail("该邀请码已经在池里了");
-      if (state.codes.some((c) => c.creator === token && c.status === "available")) throw fail("同一个人最多保留 1 个可用邀请码");
-      const rank = state.codes.reduce((m, c) => Math.max(m, c.queueRank), 0) + 1;
+      if (s.codes.some((c) => c.code === norm)) throw fail("该邀请码已经在池里了");
+      if (s.codes.some((c) => c.creator === token && c.status === "available")) {
+        throw fail("同一个人最多保留 1 个可用邀请码");
+      }
+      const rank = s.codes.reduce((m, c) => Math.max(m, c.queueRank), 0) + 1;
       const row = {
-        id: "demo-" + (state.seq + 1),
-        code: norm,
-        status: "available",
-        totalSpots: spots,
-        remainingSpots: spots,
-        claimedCount: 0,
-        queueRank: rank,
+        id: "demo-" + (s.seq + 1), code: norm, status: "available", totalSpots: spots,
+        remainingSpots: spots, claimedCount: 0, queueRank: rank, createdAt: new Date().toISOString(),
         creator: token,
-        createdAt: new Date().toISOString(),
       };
-      state.seq += 1;
-      state.codes.push(row);
-      this.write(state);
-      return { ok: true, card: this.card(row, token), stats: this.stats(state) };
+      s.seq += 1;
+      s.codes.push(row);
+      this.write(s);
+      return { ok: true, card: this.publicCard(row), stats: this.stats(s) };
     },
-    async claim(id, token) {
-      const state = this.read();
-      const row = state.codes.find((c) => c.id === id);
+    async reveal(id, token) {
+      const s = this.read();
+      const today = beijingDate();
+      const rec = s.reveals[token];
+      const used = rec && rec.date === today ? rec.n : 0;
+      if (used >= CFG.dailyReveals) {
+        throw fail("今天的揭晓次数用完了（每人每天 " + CFG.dailyReveals + " 次，北京时间 00:00 重置）");
+      }
+      const row = s.codes.find((c) => c.id === id);
       if (!row) throw fail("这个邀请码不存在了");
-      if (row.status !== "available" || row.remainingSpots <= 0) throw fail("这个邀请码已经用完了");
-      const used = state.claims[token] || 0;
-      if (used >= CFG.maxClaims) throw fail("每人最多领取 " + CFG.maxClaims + " 个邀请码，你已经用完了");
-      const claimedKey = token + "|" + id;
-      if (state.reports.indexOf(claimedKey) >= 0) throw fail("你已经领取过这个码了");
+      if (row.status !== "available" || row.remainingSpots <= 0) throw fail("这个邀请码已经被别人揭晓了");
+      if (s.reports[token + "|" + id]) throw fail("你已经揭晓过这个码了");
+
       row.remainingSpots -= 1;
       row.claimedCount += 1;
       if (row.remainingSpots <= 0) row.status = "used";
-      state.claims[token] = used + 1;
-      state.reports.push(claimedKey);
-      this.write(state);
+      s.reports[token + "|" + id] = true;
+      s.reveals[token] = { date: today, n: used + 1 };
+      this.write(s);
       return {
         ok: true,
         code: row.code,
-        card: this.card(row, token),
-        stats: this.stats(state),
-        quotaRemaining: Math.max(0, CFG.maxClaims - used - 1),
+        card: { ...this.publicCard(row), code: row.code },
+        stats: this.stats(s),
+        quotaRemaining: Math.max(0, CFG.dailyReveals - used - 1),
       };
     },
     async feedback(id, reason, note, token) {
-      const state = this.read();
-      const row = state.codes.find((c) => c.id === id);
-      if (!row) throw fail("邀请码不存在");
+      const s = this.read();
+      if (!s.codes.some((c) => c.id === id)) throw fail("邀请码不存在");
       const key = token + "|" + id + "|" + reason;
-      state.feedbacks = state.feedbacks || {};
-      if (state.feedbacks[key]) throw fail("你已经反馈过同样的原因了");
-      state.feedbacks[key] = { reason, note: String(note || "").slice(0, 300), at: new Date().toISOString() };
-      this.write(state);
+      s.feedbacks = s.feedbacks || {};
+      if (s.feedbacks[key]) throw fail("你已经反馈过同样的原因了");
+      s.feedbacks[key] = { reason, note: String(note || "").slice(0, 300), at: new Date().toISOString() };
+      this.write(s);
       return { ok: true };
     },
-    async adminVerify() {
-      throw fail("演示模式没有真正的管理密钥：配置 Supabase 后才能管理全站");
-    },
-    async adminFind() {
-      throw fail("演示模式不支持管理");
-    },
-    async adminUpdate() {
-      throw fail("演示模式不支持管理");
-    },
-    async adminReseed() {
-      throw fail("演示模式不支持管理");
-    },
+    async admin() { throw fail("演示模式没有管理后台：配上 Supabase 才能管理全站"); },
   };
 
   /* ------------------------------------------------------------ 统一 API */
 
   const api = {
     list(status, q) {
-      if (MODE === "remote") {
-        return rpc("list_codes", {
-          p_status: status,
-          p_query: q,
-          p_limit: 500,
-          p_offset: 0,
-          p_token: visitorToken(),
-        });
-      }
-      return demo.list(status, q, visitorToken());
-    },
-    codesOfVisitor() {
-      if (MODE === "remote") return rpc("codes_of_visitor", { p_token: visitorToken() });
-      return demo.codesOfVisitor(visitorToken());
+      return MODE === "remote"
+        ? rpc("list_codes", { p_status: status, p_query: q, p_limit: 500, p_offset: 0, p_token: visitorToken() })
+        : demo.list(status, q, visitorToken());
     },
     publish(code, spots) {
-      if (MODE === "remote") return rpc("publish_code", { p_code: code, p_spots: spots, p_token: visitorToken() });
-      return demo.publish(code, spots, visitorToken());
+      return MODE === "remote"
+        ? rpc("publish_code", { p_code: code, p_spots: spots, p_token: visitorToken() })
+        : demo.publish(code, spots, visitorToken());
     },
-    claim(id) {
-      if (MODE === "remote") return rpc("claim_code", { p_id: id, p_token: visitorToken() });
-      return demo.claim(id, visitorToken());
+    reveal(id) {
+      return MODE === "remote"
+        ? rpc("reveal_code", { p_id: id, p_token: visitorToken() })
+        : demo.reveal(id, visitorToken());
     },
     feedback(id, reason, note) {
-      if (MODE === "remote") {
-        return rpc("submit_feedback", { p_id: id, p_reason: reason, p_note: note, p_token: visitorToken() });
-      }
-      return demo.feedback(id, reason, note, visitorToken());
+      return MODE === "remote"
+        ? rpc("submit_feedback", { p_id: id, p_reason: reason, p_note: note, p_token: visitorToken() })
+        : demo.feedback(id, reason, note, visitorToken());
     },
     adminVerify(key) {
-      if (MODE === "remote") return rpc("admin_verify", { p_key: key });
-      return demo.adminVerify();
+      return MODE === "remote" ? rpc("admin_verify", { p_key: key }) : demo.admin();
     },
     adminFind(code, key) {
-      if (MODE === "remote") return rpc("admin_find", { p_code: code, p_key: key });
-      return demo.adminFind();
+      return MODE === "remote" ? rpc("admin_find", { p_code: code, p_key: key }) : demo.admin();
     },
     adminUpdate(id, key, payload) {
-      if (MODE === "remote") {
-        return rpc("admin_update", {
-          p_id: id,
-          p_key: key,
-          p_remaining: payload.remaining,
-          p_position: payload.position,
-          p_status: payload.status,
-        });
-      }
-      return demo.adminUpdate();
+      return MODE === "remote"
+        ? rpc("admin_update", { p_id: id, p_key: key, p_remaining: payload.remaining, p_position: payload.position, p_status: payload.status })
+        : demo.admin();
     },
     adminReseed(key) {
-      if (MODE === "remote") return rpc("admin_reseed", { p_key: key });
-      return demo.adminReseed();
+      return MODE === "remote" ? rpc("admin_reseed", { p_key: key }) : demo.admin();
     },
   };
 
@@ -319,10 +317,11 @@
     filter: "available",
     query: "",
     cards: [],
-    stats: { issued: 0, available: 0, used: 0, availableSpots: 0 },
+    stats: { issued: 0, available: 0, revealed: 0, availableSpots: 0 },
     head: null,
     quota: null,
     busy: false,
+    feedbackTarget: null,
   };
 
   /* ------------------------------------------------------------ 渲染 */
@@ -330,7 +329,7 @@
   function renderStats() {
     $("#statIssued").textContent = state.stats.issued ?? "—";
     $("#statAvailable").textContent = state.stats.available ?? "—";
-    $("#statSpots").textContent = state.stats.availableSpots ?? "—";
+    $("#statSpots").textContent = state.stats.revealedCount ?? state.stats.revealed ?? "—";
   }
 
   function renderHero() {
@@ -338,62 +337,98 @@
     const text = $("#heroStatus");
     if (MODE === "demo") {
       dot.className = "dot warn";
-      text.textContent = "演示模式：数据只在这台浏览器里，配置 Supabase 后全站共享";
-    } else if (state.stats.available > 0) {
+      text.textContent = "演示模式：数据只在这台浏览器里，配上 Supabase 才全站共享";
+      return;
+    }
+    if (state.stats.available > 0) {
       dot.className = "dot";
-      text.textContent = "已连接 · 现在有 " + state.stats.available + " 个码可以领";
+      text.textContent = "已连接 · 现在有 " + state.stats.available + " 个码可以揭晓";
     } else {
       dot.className = "dot warn";
-      text.textContent = "已连接 · 暂时没有可领取的邀请码，等别人放码";
+      text.textContent = "已连接 · 暂时没有可揭晓的码，等别人放";
     }
   }
 
   function renderPassport() {
     const box = $("#passport");
     const head = state.head;
-    if (!head) {
-      box.hidden = true;
-      return;
-    }
+    if (!head) { box.hidden = true; return; }
     box.hidden = false;
-    $("#passportCode").textContent = head.code;
+
+    const got = mine.get(head.id);
+    const codeEl = $("#passportCode");
+    codeEl.textContent = got ? got.code : head.mask;
+    codeEl.classList.toggle("revealed", !!got);
+
     $("#passportRank").textContent = "顺位 #" + head.queueRank;
     $("#passportSpots").textContent = head.remainingSpots + " / " + head.totalSpots;
-    $("#passportState").textContent = head.status === "available" ? "可领取" : "已用完";
+    $("#passportState").textContent = got
+      ? "已领取（你）"
+      : head.status === "available" ? "可揭晓" : "已被揭";
     $("#passportTime").textContent = timeAgo(head.createdAt);
-    $("#quotaHint").textContent = state.quota == null
-      ? "每人最多领 " + CFG.maxClaims + " 个码"
-      : "今日领取名额：还剩 " + state.quota + " / " + CFG.maxClaims;
-    $("#passportClaim").disabled = head.status !== "available";
+
+    const q = state.quota;
+    $("#quotaHint").textContent = q
+      ? "今日揭晓名额：" + q.remaining + " / " + q.limit + "（" + (q.resetAt || "北京时间 00:00") + " 重置）"
+      : "今日揭晓名额：—";
+
+    $("#passportCopy").disabled = !got;
+    const btn = $("#passportReveal");
+    if (got) {
+      btn.hidden = true;
+    } else {
+      btn.hidden = false;
+      btn.disabled = head.status !== "available" || (q && q.remaining <= 0);
+      btn.textContent = head.status === "available"
+        ? (q && q.remaining <= 0 ? "今日名额已用完" : "点击揭晓")
+        : "已被别人揭晓";
+    }
+  }
+
+  function renderMine() {
+    const m = mine.all();
+    const entries = Object.values(m).sort((a, b) => (a.at < b.at ? 1 : -1));
+    const card = $("#myCodesCard");
+    if (!entries.length) { card.hidden = true; return; }
+    card.hidden = false;
+    $("#myCodes").innerHTML = entries.map((e) => (
+      '<div class="mine-row">' +
+        "<code>" + esc(e.code) + "</code>" +
+        "<span>" + timeAgo(e.at) + "</span>" +
+        '<button class="mini-btn" data-copy="' + esc(e.code) + '">复制</button>' +
+      "</div>"
+    )).join("");
   }
 
   function renderList() {
     const list = $("#list");
     if (!state.cards.length) {
       list.innerHTML = state.query
-        ? '<div class="empty">没有匹配「' + esc(state.query) + '」的邀请码</div>'
+        ? '<div class="empty">没有码能用「' + esc(state.query) + '」搜到</div>'
         : '<div class="empty">' + (state.filter === "available"
-            ? "暂时没有可领取的邀请码，等你放第一个进来"
+            ? "暂时没有可揭晓的码，等你放第一个进来"
             : "这个分类下还没有记录") + "</div>";
       return;
     }
     list.innerHTML = state.cards.map((c) => {
+      const got = mine.get(c.id);
       const dim = c.status === "available" ? "" : " dim";
       const pct = c.totalSpots ? Math.round((c.remainingSpots / c.totalSpots) * 100) : 0;
-      const badge = c.status === "available" ? "可领取" : "已用完";
+      const stateText = got ? "已领取（你）" : c.status === "available" ? "可揭晓" : "已被揭";
+      const shown = got ? '<div class="row-code revealed">' + esc(got.code) + "</div>"
+                        : '<div class="row-code masked">' + esc(c.mask) + "</div>";
       const actions = [
-        '<button class="mini-btn" data-act="copy" data-id="' + esc(c.id) + '">复制</button>',
-        c.status === "available"
-          ? '<button class="mini-btn solid" data-act="claim" data-id="' + esc(c.id) + '">领走一个 -1</button>'
+        got ? '<button class="mini-btn" data-act="copy" data-id="' + esc(c.id) + '">复制</button>' : "",
+        (c.status === "available" && !got)
+          ? '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">揭晓</button>'
           : "",
       ].join("");
       return (
         '<div class="row' + dim + '">' +
           '<div class="row-rank">#' + c.queueRank + "</div>" +
-          '<div class="row-main">' +
-            '<div class="row-code">' + esc(c.code) + "</div>" +
-            '<div class="row-sub">' + badge + (c.mine ? " · 我发布的" : "") +
-              " · " + timeAgo(c.createdAt) + " · 领走 " + c.claimedCount + " 次</div>" +
+          '<div class="row-main">' + shown +
+            '<div class="row-sub">' + stateText + " · " + timeAgo(c.createdAt) +
+              " · 已揭 " + c.claimedCount + " 次</div>" +
           "</div>" +
           '<div class="row-spots"><span class="bar"><i style="width:' + pct + '%"></i></span>' +
             c.remainingSpots + " / " + c.totalSpots + "</div>" +
@@ -407,48 +442,67 @@
     renderStats();
     renderHero();
     renderPassport();
+    renderMine();
     renderList();
   }
 
-  /* ------------------------------------------------------------ 数据加载 */
+  /* ------------------------------------------------------------ 加载 */
 
   let loading = false;
-  async function load(silent) {
+  async function load() {
     if (loading) return;
     loading = true;
     try {
       const data = await api.list(state.filter, state.query);
       state.cards = data.cards || [];
       state.stats = data.stats || state.stats;
-      state.head = state.cards.find((c) => c.status === "available") || null;
-      if (state.filter !== "available") {
+      if (data.quota) state.quota = data.quota;
+
+      // 队首：优先取"还没被我揭晓过"的第一个可揭晓卡，避免队首一直是自己领过的那个
+      const pickHead = (list) => {
+        const avail = list.filter((c) => c.status === "available");
+        return avail.find((c) => !mine.has(c.id)) || avail[0] || null;
+      };
+      if (state.filter === "available") {
+        state.head = pickHead(state.cards);
+      } else {
         const avail = (await api.list("available", "")).cards || [];
-        state.head = avail.find((c) => c.status === "available") || null;
+        state.head = pickHead(avail);
       }
       renderAll();
-      if (!silent) {
-        const quota = await api.codesOfVisitor().catch(() => null);
-        if (quota && quota.quotaRemaining != null) {
-          state.quota = quota.quotaRemaining;
-          renderPassport();
-        }
-      }
     } catch (e) {
       $("#list").innerHTML = '<div class="error-state">加载失败：' + esc(e.message) + "</div>";
       $("#heroDot").className = "dot bad";
       $("#heroStatus").textContent = "连接失败：" + e.message;
-      if (!silent) toast(e.message, true);
     } finally {
       loading = false;
     }
   }
 
-  /* ------------------------------------------------------------ 事件 */
+  /* ------------------------------------------------------------ 交互 */
 
-  const spotsSelect = $("#spotsInput");
   function fillSpots() {
     const opts = [1, 2, 3, 5, 10, 20, 30].filter((n) => n <= CFG.maxSpots);
-    spotsSelect.innerHTML = opts.map((n) => '<option value="' + n + '"' + (n === 3 ? " selected" : "") + ">" + n + " 次</option>").join("");
+    $("#spotsInput").innerHTML = opts
+      .map((n) => '<option value="' + n + '"' + (n === 3 ? " selected" : "") + ">" + n + " 次</option>")
+      .join("");
+  }
+
+  async function doReveal(card) {
+    if (state.busy) return;
+    state.busy = true;
+    try {
+      const res = await api.reveal(card.id);
+      mine.add(card.id, res.code);
+      if (res.quotaRemaining != null && state.quota) state.quota = { ...state.quota, remaining: res.quotaRemaining };
+      const ok = await copyText(res.code);
+      toast("揭晓成功：" + res.code + (ok ? "，已复制到剪贴板" : "，请手动复制"), false);
+      await load();
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      state.busy = false;
+    }
   }
 
   function wire() {
@@ -465,28 +519,19 @@
     $("#searchInput").addEventListener("input", (e) => {
       state.query = e.target.value;
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => load(true), 220);
+      searchTimer = setTimeout(load, 240);
     });
 
-    $("#refreshBtn").addEventListener("click", () => {
-      toast("已刷新");
-      load();
-    });
+    $("#refreshBtn").addEventListener("click", () => { toast("已刷新"); load(); });
 
     $("#shareForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const errBox = $("#shareError");
       errBox.hidden = true;
-      const raw = $("#codeInput").value;
-      const code = normalizeCode(raw);
-      const spots = parseInt(spotsSelect.value, 10);
+      const code = normalizeCode($("#codeInput").value);
+      const spots = parseInt($("#spotsInput").value, 10);
       if (code.length < CFG.codeMinLen || code.length > CFG.codeMaxLen) {
         errBox.textContent = "邀请码长度需为 " + CFG.codeMinLen + "–" + CFG.codeMaxLen + " 位字母或数字";
-        errBox.hidden = false;
-        return;
-      }
-      if (!(spots >= 1 && spots <= CFG.maxSpots)) {
-        errBox.textContent = "剩余次数必须是 1–" + CFG.maxSpots + " 的整数";
         errBox.hidden = false;
         return;
       }
@@ -496,7 +541,7 @@
       try {
         await api.publish(code, spots);
         $("#codeInput").value = "";
-        toast("分享成功：" + code + " 已排到队尾");
+        toast("已放进队列：" + code);
         state.filter = "available";
         Array.from($("#filter").children).forEach((b) => b.classList.toggle("active", b.dataset.status === "available"));
         await load();
@@ -509,37 +554,45 @@
       }
     });
 
+    $("#passportReveal").addEventListener("click", async () => {
+      if (state.head) await doReveal(state.head);
+    });
     $("#passportCopy").addEventListener("click", async () => {
       if (!state.head) return;
-      const ok = await copyText(state.head.code);
-      toast(ok ? "已复制：" + state.head.code : "复制失败，请手动选中", !ok);
+      const got = mine.get(state.head.id);
+      if (!got) return;
+      const ok = await copyText(got.code);
+      toast(ok ? "已复制：" + got.code : "复制失败，请手动选中", !ok);
     });
-
-    $("#passportClaim").addEventListener("click", async () => {
-      if (!state.head) return;
-      await doClaim(state.head);
-    });
-
     $("#passportFeedback").addEventListener("click", () => {
-      if (!state.head) return;
-      openFeedback(state.head);
+      if (state.head) openFeedback(state.head);
     });
 
     $("#list").addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-act]");
       if (!btn) return;
-      const card = state.cards.find((c) => String(c.id) === btn.dataset.id) ||
-                   (state.head && String(state.head.id) === btn.dataset.id ? state.head : null);
+      const id = btn.dataset.id;
+      const card = state.cards.find((c) => String(c.id) === id) ||
+                   (state.head && String(state.head.id) === id ? state.head : null);
       if (!card) return;
-      if (btn.dataset.act === "copy") {
-        const ok = await copyText(card.code);
-        toast(ok ? "已复制：" + card.code : "复制失败，请手动选中", !ok);
-      } else if (btn.dataset.act === "claim") {
-        await doClaim(card);
+      if (btn.dataset.act === "reveal") {
+        await doReveal(card);
+      } else if (btn.dataset.act === "copy") {
+        const got = mine.get(card.id);
+        if (!got) return;
+        const ok = await copyText(got.code);
+        toast(ok ? "已复制：" + got.code : "复制失败，请手动选中", !ok);
       }
     });
 
-    // 管理密钥
+    $("#myCodes").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-copy]");
+      if (!btn) return;
+      const ok = await copyText(btn.dataset.copy);
+      toast(ok ? "已复制：" + btn.dataset.copy : "复制失败", !ok);
+    });
+
+    // 管理
     $("#adminBtn").addEventListener("click", openAdmin);
     $("#adminClose").addEventListener("click", () => ($("#adminModal").hidden = true));
     $("#adminModal").addEventListener("click", (e) => {
@@ -552,22 +605,19 @@
       if (!key) { err.textContent = "先填密钥"; err.hidden = false; return; }
       try {
         await api.adminVerify(key);
-        localStorage.setItem(adminKeyStore, key);
+        localStorage.setItem(ADMIN_KEY, key);
         $("#adminPanel").hidden = false;
         toast("管理密钥已导入");
-      } catch (e) {
-        err.textContent = e.message;
-        err.hidden = false;
-      }
+      } catch (e) { err.textContent = e.message; err.hidden = false; }
     });
     $("#adminClear").addEventListener("click", () => {
-      localStorage.removeItem(adminKeyStore);
+      localStorage.removeItem(ADMIN_KEY);
       $("#adminKeyInput").value = "";
       $("#adminPanel").hidden = true;
       toast("已清除本地密钥");
     });
     $("#adminApply").addEventListener("click", async () => {
-      const key = localStorage.getItem(adminKeyStore) || $("#adminKeyInput").value.trim();
+      const key = localStorage.getItem(ADMIN_KEY) || $("#adminKeyInput").value.trim();
       const code = normalizeCode($("#adminCodeInput").value);
       if (!code) { toast("先填邀请码", true); return; }
       try {
@@ -578,19 +628,15 @@
         await api.adminUpdate(found.card.id, key, { remaining, position, status });
         toast("已更新：" + code);
         await load();
-      } catch (e) {
-        toast(e.message, true);
-      }
+      } catch (e) { toast(e.message, true); }
     });
     $("#adminReseed").addEventListener("click", async () => {
-      const key = localStorage.getItem(adminKeyStore) || $("#adminKeyInput").value.trim();
+      const key = localStorage.getItem(ADMIN_KEY) || $("#adminKeyInput").value.trim();
       try {
         await api.adminReseed(key);
         toast("顺位已重排为 1..N");
         await load();
-      } catch (e) {
-        toast(e.message, true);
-      }
+      } catch (e) { toast(e.message, true); }
     });
 
     // 反馈
@@ -600,43 +646,19 @@
       if (e.target.id === "feedbackModal") $("#feedbackModal").hidden = true;
     });
     $("#feedbackSubmit").addEventListener("click", async () => {
-      const target = state.feedbackTarget;
-      if (!target) return;
+      if (!state.feedbackTarget) return;
       const err = $("#feedbackError");
       err.hidden = true;
       try {
-        await api.feedback(target.id, $("#feedbackReason").value, $("#feedbackNote").value.trim());
+        await api.feedback(state.feedbackTarget.id, $("#feedbackReason").value, $("#feedbackNote").value.trim());
         $("#feedbackModal").hidden = true;
         $("#feedbackNote").value = "";
         toast("反馈已提交，谢谢");
-      } catch (e) {
-        err.textContent = e.message;
-        err.hidden = false;
-      }
+      } catch (e) { err.textContent = e.message; err.hidden = false; }
     });
 
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) load(true);
-    });
-    setInterval(() => {
-      if (!document.hidden) load(true);
-    }, 25000);
-  }
-
-  async function doClaim(card) {
-    if (state.busy) return;
-    state.busy = true;
-    try {
-      const res = await api.claim(card.id);
-      const ok = await copyText(res.code);
-      state.quota = res.quotaRemaining != null ? res.quotaRemaining : state.quota;
-      toast("领到了 " + res.code + (ok ? "，已复制到剪贴板" : "，请手动复制"), false);
-      await load(true);
-    } catch (e) {
-      toast(e.message, true);
-    } finally {
-      state.busy = false;
-    }
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+    setInterval(() => { if (!document.hidden) load(); }, 20000);
   }
 
   function openFeedback(card) {
@@ -646,17 +668,15 @@
   }
 
   function openAdmin() {
-    const key = localStorage.getItem(adminKeyStore);
+    const key = localStorage.getItem(ADMIN_KEY);
     $("#adminKeyInput").value = key || "";
     $("#adminPanel").hidden = !key;
     $("#adminError").hidden = true;
     $("#adminModal").hidden = false;
     if (key) {
-      api.adminVerify(key).then(() => {
-        $("#adminPanel").hidden = false;
-      }).catch(() => {
-        $("#adminPanel").hidden = true;
-      });
+      api.adminVerify(key)
+        .then(() => { $("#adminPanel").hidden = false; })
+        .catch(() => { $("#adminPanel").hidden = true; });
     }
   }
 
@@ -664,10 +684,6 @@
 
   fillSpots();
   wire();
+  $("#shareTip").textContent = MODE === "demo" ? "演示模式 · 仅本机可见" : "每人限 " + CFG.maxPublish + " 条";
   load();
-  if (MODE === "demo") {
-    $("#shareTip").textContent = "演示模式 · 仅本机可见";
-  } else {
-    $("#shareTip").textContent = "每人限 " + CFG.maxPublish + " 条";
-  }
 })();

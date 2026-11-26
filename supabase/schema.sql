@@ -1,7 +1,9 @@
--- 小豆邀请码互助站 · Supabase 数据库初始化
+-- 小豆邀请码互助站 · Supabase 数据库初始化（揭晓制版本）
 -- 在 Supabase Dashboard → SQL Editor 里整段粘贴执行一次即可。
--- 设计参考 muse-invite-hub：所有写入都走 SECURITY DEFINER RPC，前端只持有 anon key。
--- 只依赖 PostgreSQL 内置的 sha256()，不需要 pgcrypto。
+--
+-- 核心策略：邀请码在列表接口里永远不出现明文，只有「揭晓」这个动作才返回，
+-- 并且揭晓即标记为已领取、扣减剩余次数、计入每人每日揭晓配额。
+-- 前端只拿 anon key；所有写操作走 SECURITY DEFINER RPC；只依赖内置 sha256()。
 
 -- ---------------------------------------------------------------- 表
 
@@ -26,7 +28,7 @@ create index if not exists ix_invite_codes_status on public.invite_codes (status
 create table if not exists public.reports (
   id           bigserial primary key,
   code_id      uuid references public.invite_codes (id) on delete set null,
-  action       text not null check (action in ('claim', 'used')),
+  action       text not null check (action in ('reveal')),
   visitor_hash text not null,
   created_at   timestamptz not null default now()
 );
@@ -34,7 +36,7 @@ create table if not exists public.reports (
 create unique index if not exists ux_reports
   on public.reports (code_id, visitor_hash, action);
 create index if not exists ix_reports_visitor
-  on public.reports (visitor_hash, action);
+  on public.reports (visitor_hash, action, created_at);
 
 create table if not exists public.publish_log (
   id           bigserial primary key,
@@ -87,21 +89,51 @@ as $$
   select encode(sha256(convert_to('xd-hub:' || coalesce(p_token, ''), 'UTF8')), 'hex');
 $$;
 
+create or replace function public.hub_today()
+returns date
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select ((now() at time zone 'UTC') + interval '8 hours')::date;
+$$;
+
 create or replace function public.hub_stats()
 returns json
 language sql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
   select json_build_object(
     'issued',         (select count(*) from public.invite_codes),
     'available',      (select count(*) from public.invite_codes where status = 'available'),
-    'used',           (select count(*) from public.invite_codes where status <> 'available'),
+    'revealed',       (select count(*) from public.invite_codes where status <> 'available'),
+    'revealedCount',  (select coalesce(sum(claimed_count), 0) from public.invite_codes),
     'availableSpots', (select coalesce(sum(remaining_spots), 0) from public.invite_codes where status = 'available')
   );
 $$;
 
-create or replace function public.hub_card(p_row public.invite_codes, p_visitor text)
+-- 对外卡片：不带明文邀请码，只给遮罩长度和状态
+create or replace function public.hub_card_public(p_row public.invite_codes)
+returns json
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select json_build_object(
+    'id',             p_row.id,
+    'mask',           repeat('•', greatest(length(p_row.code), 4)),
+    'status',         p_row.status,
+    'totalSpots',     p_row.total_spots,
+    'remainingSpots', p_row.remaining_spots,
+    'claimedCount',   p_row.claimed_count,
+    'queueRank',      p_row.queue_rank,
+    'createdAt',      p_row.created_at
+  );
+$$;
+
+-- 只有揭晓之后（或管理员）才用这张卡，带明文
+create or replace function public.hub_card_full(p_row public.invite_codes)
 returns json
 language sql
 immutable
@@ -115,8 +147,7 @@ as $$
     'remainingSpots', p_row.remaining_spots,
     'claimedCount',   p_row.claimed_count,
     'queueRank',      p_row.queue_rank,
-    'createdAt',      p_row.created_at,
-    'mine',           (p_row.creator_hash = p_visitor)
+    'createdAt',      p_row.created_at
   );
 $$;
 
@@ -124,7 +155,7 @@ create or replace function public.hub_require_admin(p_key text)
 returns void
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_hash text;
@@ -139,15 +170,13 @@ begin
 end;
 $$;
 
--- 通用管理密钥由你自己执行一次，例如：
--- update public.app_settings
---    set admin_token_hash = encode(sha256(convert_to('你设置的一长串密钥', 'UTF8')), 'hex'), updated_at = now()
---  where id = true;
--- 若表里还没有行，先执行：
+-- 通用管理密钥由你自己执行一次（把字符串换掉）：
 -- insert into public.app_settings (id, admin_token_hash)
--- values (true, encode(sha256(convert_to('你设置的一长串密钥', 'UTF8')), 'hex'));
+-- values (true, encode(sha256(convert_to('你设置的一长串密钥', 'UTF8')), 'hex'))
+-- on conflict (id) do update
+--   set admin_token_hash = excluded.admin_token_hash, updated_at = now();
 
--- ---------------------------------------------------------------- RPC：读
+-- ---------------------------------------------------------------- RPC：读（不含明文）
 
 create or replace function public.list_codes(
   p_status text default 'available',
@@ -159,20 +188,19 @@ create or replace function public.list_codes(
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
-  v_status  text := coalesce(nullif(trim(p_status), ''), 'available');
-  v_query   text := upper(regexp_replace(coalesce(p_query, ''), '[^A-Za-z0-9]', '', 'g'));
-  v_limit   integer := least(greatest(coalesce(p_limit, 500), 1), 500);
-  v_offset  integer := greatest(coalesce(p_offset, 0), 0);
-  v_visitor text := public.hub_hash(p_token);
-  v_cards   json;
+  v_status text := coalesce(nullif(trim(p_status), ''), 'available');
+  v_query  text := upper(regexp_replace(coalesce(p_query, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_limit  integer := least(greatest(coalesce(p_limit, 500), 1), 500);
+  v_offset integer := greatest(coalesce(p_offset, 0), 0);
+  v_cards  json;
 begin
   select coalesce(json_agg(t.card), '[]'::json)
     into v_cards
     from (
-      select public.hub_card(c, v_visitor) as card
+      select public.hub_card_public(c) as card
         from public.invite_codes c
        where (case v_status
                 when 'available' then c.status = 'available'
@@ -187,34 +215,22 @@ begin
   return json_build_object(
     'ok', true,
     'cards', v_cards,
-    'stats', public.hub_stats()
+    'stats', public.hub_stats(),
+    'quota', json_build_object(
+      'remaining', greatest(0, 2 - (
+        select count(*) from public.reports r
+         where r.visitor_hash = public.hub_hash(p_token)
+           and r.action = 'reveal'
+           and ((r.created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today()
+      )),
+      'limit', 2,
+      'resetAt', '北京时间 00:00'
+    )
   );
 end;
 $$;
 
-create or replace function public.codes_of_visitor(
-  p_token text default ''
-)
-returns json
-language plpgsql
-security definer
-set search_path = public, extensions, pg_temp
-as $$
-declare
-  v_visitor text := public.hub_hash(p_token);
-begin
-  return json_build_object(
-    'ok', true,
-    'quotaRemaining', greatest(0, 2 - (select count(*) from public.reports
-                                        where visitor_hash = v_visitor and action = 'claim')),
-    'myCodes', coalesce((
-      select json_agg(public.hub_card(c, v_visitor) order by c.queue_rank)
-        from public.invite_codes c
-       where c.creator_hash = v_visitor and c.status = 'available'
-    ), '[]'::json)
-  );
-end;
-$$;
+-- 搜索不会泄露：搜的是 code_norm，但返回的还是遮罩卡；命中即为"有这么个码"。
 
 -- ---------------------------------------------------------------- RPC：发布
 
@@ -226,7 +242,7 @@ create or replace function public.publish_code(
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_norm    text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
@@ -275,27 +291,27 @@ begin
 
   return json_build_object(
     'ok', true,
-    'card', public.hub_card(v_row, v_visitor),
+    'card', public.hub_card_public(v_row),
     'stats', public.hub_stats()
   );
 end;
 $$;
 
--- ---------------------------------------------------------------- RPC：领取（剩余次数 -1）
+-- ---------------------------------------------------------------- RPC：揭晓（唯一出码口）
 
-create or replace function public.claim_code(
+create or replace function public.reveal_code(
   p_id    uuid,
   p_token text default ''
 )
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_visitor  text := public.hub_hash(p_token);
   v_row      public.invite_codes;
-  v_counted  integer;
+  v_today_n  integer;
   v_hourly   integer;
   v_remaining integer;
 begin
@@ -304,24 +320,27 @@ begin
     raise exception '这个邀请码不存在了' using errcode = 'P0001';
   end if;
   if v_row.status <> 'available' or v_row.remaining_spots <= 0 then
-    raise exception '这个邀请码已经用完了' using errcode = 'P0001';
+    raise exception '这个邀请码已经被别人揭晓了' using errcode = 'P0001';
   end if;
 
   if exists (select 1 from public.reports
-              where code_id = p_id and visitor_hash = v_visitor and action = 'claim') then
-    raise exception '你已经领取过这个码了' using errcode = 'P0001';
+              where code_id = p_id and visitor_hash = v_visitor and action = 'reveal') then
+    raise exception '你已经揭晓过这个码了' using errcode = 'P0001';
   end if;
 
-  select count(*) into v_counted
-    from public.reports where visitor_hash = v_visitor and action = 'claim';
-  if v_counted >= 2 then
-    raise exception '每人最多领取 2 个邀请码，你已经用完了' using errcode = 'P0001';
+  select count(*) into v_today_n
+    from public.reports r
+   where r.visitor_hash = v_visitor
+     and r.action = 'reveal'
+     and ((r.created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today();
+  if v_today_n >= 2 then
+    raise exception '今天的揭晓次数用完了（每人每天 2 次，北京时间 00:00 重置）' using errcode = 'P0001';
   end if;
 
   select count(*) into v_hourly
     from public.reports
    where visitor_hash = v_visitor and created_at >= now() - interval '1 hour';
-  if v_hourly >= 60 then
+  if v_hourly >= 30 then
     raise exception '操作太频繁，先歇一会儿' using errcode = 'P0001';
   end if;
 
@@ -335,14 +354,14 @@ begin
    where id = p_id
   returning * into v_row;
 
-  insert into public.reports (code_id, action, visitor_hash) values (p_id, 'claim', v_visitor);
+  insert into public.reports (code_id, action, visitor_hash) values (p_id, 'reveal', v_visitor);
 
   return json_build_object(
     'ok', true,
     'code', v_row.code,
-    'card', public.hub_card(v_row, v_visitor),
+    'card', public.hub_card_full(v_row),
     'stats', public.hub_stats(),
-    'quotaRemaining', greatest(0, 2 - (v_counted + 1))
+    'quotaRemaining', greatest(0, 2 - (v_today_n + 1))
   );
 end;
 $$;
@@ -358,7 +377,7 @@ create or replace function public.submit_feedback(
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_visitor text := public.hub_hash(p_token);
@@ -392,13 +411,13 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------- RPC：管理
+-- ---------------------------------------------------------------- RPC：管理（可看明文）
 
 create or replace function public.admin_verify(p_key text)
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 begin
   perform public.hub_require_admin(p_key);
@@ -410,7 +429,7 @@ create or replace function public.admin_find(p_code text, p_key text)
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_norm text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
@@ -421,7 +440,7 @@ begin
   if not found then
     raise exception '池子里没有这个邀请码' using errcode = 'P0001';
   end if;
-  return json_build_object('ok', true, 'card', public.hub_card(v_row, null));
+  return json_build_object('ok', true, 'card', public.hub_card_full(v_row));
 end;
 $$;
 
@@ -435,7 +454,7 @@ create or replace function public.admin_update(
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_row     public.invite_codes;
@@ -471,7 +490,6 @@ begin
     v_pos := least(greatest(p_position, 1), v_total);
     perform pg_advisory_xact_lock(778899);
 
-    -- 目标码插到 v_pos，原 v_pos 及之后的码顺延一位，最后整体重编号为 1..N
     with ordered as (
       select id,
              row_number() over (
@@ -493,7 +511,7 @@ begin
    where id = p_id
   returning * into v_row;
 
-  return json_build_object('ok', true, 'card', public.hub_card(v_row, null), 'stats', public.hub_stats());
+  return json_build_object('ok', true, 'card', public.hub_card_full(v_row), 'stats', public.hub_stats());
 end;
 $$;
 
@@ -501,7 +519,7 @@ create or replace function public.admin_reseed(p_key text)
 returns json
 language plpgsql
 security definer
-set search_path = public, extensions, pg_temp
+set search_path = public, pg_temp
 as $$
 begin
   perform public.hub_require_admin(p_key);
@@ -519,9 +537,8 @@ $$;
 
 revoke all on function public.hub_stats() from public;
 revoke all on function public.list_codes(text, text, integer, integer, text) from public;
-revoke all on function public.codes_of_visitor(text) from public;
 revoke all on function public.publish_code(text, integer, text) from public;
-revoke all on function public.claim_code(uuid, text) from public;
+revoke all on function public.reveal_code(uuid, text) from public;
 revoke all on function public.submit_feedback(uuid, text, text, text) from public;
 revoke all on function public.admin_verify(text) from public;
 revoke all on function public.admin_find(text, text) from public;
@@ -530,13 +547,10 @@ revoke all on function public.admin_reseed(text) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
-grant execute on function public.codes_of_visitor(text) to anon, authenticated;
 grant execute on function public.publish_code(text, integer, text) to anon, authenticated;
-grant execute on function public.claim_code(uuid, text) to anon, authenticated;
+grant execute on function public.reveal_code(uuid, text) to anon, authenticated;
 grant execute on function public.submit_feedback(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.admin_verify(text) to anon, authenticated;
 grant execute on function public.admin_find(text, text) to anon, authenticated;
 grant execute on function public.admin_update(uuid, text, integer, integer, text) to anon, authenticated;
 grant execute on function public.admin_reseed(text) to anon, authenticated;
-
--- hub_hash / hub_card / hub_require_admin 是内部函数，不授权给 anon。
