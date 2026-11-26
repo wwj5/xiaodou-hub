@@ -560,6 +560,8 @@ input::placeholder { color: var(--muted-2); }
 }
 .foot-links a:hover, .foot-link:hover { color: var(--blue); }
 .foot-contact { margin-top: 4px; }
+.foot-wm { margin-top: 6px; color: var(--muted); }
+.foot-wm b { color: var(--blue); }
 .foot-contact a { color: var(--muted); text-decoration: none; }
 .foot-contact a:hover { color: var(--blue); text-decoration: underline; }
 
@@ -572,12 +574,12 @@ input::placeholder { color: var(--muted-2); }
   z-index: 40;
   pointer-events: none;
   background-image: url("assets/watermark.png");
-  background-size: 320px 219px;
+  background-size: 390px 255px;
   background-repeat: repeat;
-  opacity: .075;
+  opacity: .11;
 }
 @media (prefers-color-scheme: dark) {
-  .wm-layer { filter: invert(1); opacity: .1; }
+  .wm-layer { filter: invert(1); opacity: .13; }
 }
 
 .toast {

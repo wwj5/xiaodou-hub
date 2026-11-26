@@ -138,20 +138,24 @@
 独立页面 `/admin.html`（首页页脚「管理入口」进入，`noindex`，只靠密码把门）：
 
 - 输入管理密码 → `admin_verify` 校验，密码只存 sessionStorage，关浏览器即失效；
-- 四张统计卡：累计发放 / 当前可揭 / 今日揭晓 / 待处理举报；
+- 六张统计卡：累计发放 / 当前可揭 / 今日揭晓 / 欠码未回填 / 待处理举报 / 今日被拒；
 - 全量码表（明文、状态、剩余/总、顺位、已揭、发布时间），每行可「下架 / 恢复 / 置顶 / 删除」；
 - 待处理举报列表，可「标记已处理」，或「下架该码并处理」一键联动；
 - 右上「改密码」调 `admin_set_key`（新密码 ≥ 8 位），改完立刻生效；
 - **接力账本**（`admin_ledger`）：按设备指纹列出「揭晓几个 / 回填几个 / 欠几个 / 最后活跃 / 状态」，
   欠码的排最前，可勾「只看欠码的」，一键导出 CSV；
 - **设备限制**（`admin_block` / `admin_unblock`）：按住欠码不放的设备，限制后它再点「揭晓」会被
-  `reveal_code` 直接拒绝（提示先把欠的码还回来），随时可解除。
+  `reveal_code` 直接拒绝（提示先把欠的码还回来），随时可解除；
+- **被拒收录**（`admin_rejects`）：所有没通过格式校验的提交都记在 `reject_log`（只留 7 天），
+  带「提交的码 / 为什么不收 / 设备短指纹 / 时间」，可按原因筛选、看各原因的条数、一键清空——
+  用来判断哪条规则在误杀真码。
 
 > 账本只认前端算出的匿名设备指纹（`sha256('xd-hub:' + token)`），**不采集 IP、不采集姓名或手机号**，
 > 后台也看不到任何可反查真人的信息；页面公开处只给聚合数字（「有 N 人拿了码还没放回来」），不点名。
 
 对应 RPC：`admin_list`、`admin_delete_code`、`admin_resolve_report`、`admin_set_key`、`admin_ledger`、
-`admin_block`、`admin_unblock`（都先过 `hub_require_admin`，anon 可调但没密码就是「管理密码不对」）。
+`admin_block`、`admin_unblock`、`admin_rejects`、`admin_clear_rejects`（都先过 `hub_require_admin`，
+anon 可调但没密码就是「管理密码不对」）。
 
 ## 九、本地预览
 

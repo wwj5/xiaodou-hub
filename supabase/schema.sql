@@ -81,6 +81,16 @@ create table if not exists public.visitor_blocks (
 alter table public.visitor_blocks
   add column if not exists kind text not null default 'manual';
 
+-- 被拒收的提交（只给后台看，用来判断规则是不是误杀了真码）
+create table if not exists public.reject_log (
+  id           bigserial primary key,
+  code_norm    text not null,
+  visitor_hash text,
+  reason       text not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists ix_reject_log_time on public.reject_log (created_at desc);
+
 -- ---------------------------------------------------------------- 权限：表一律不可直连
 
 alter table public.invite_codes  enable row level security;
@@ -89,6 +99,7 @@ alter table public.publish_log   enable row level security;
 alter table public.feedback      enable row level security;
 alter table public.app_settings  enable row level security;
 alter table public.visitor_blocks enable row level security;
+alter table public.reject_log    enable row level security;
 
 revoke all on public.invite_codes  from anon, authenticated;
 revoke all on public.reports       from anon, authenticated;
@@ -96,6 +107,7 @@ revoke all on public.publish_log   from anon, authenticated;
 revoke all on public.feedback      from anon, authenticated;
 revoke all on public.app_settings  from anon, authenticated;
 revoke all on public.visitor_blocks from anon, authenticated;
+revoke all on public.reject_log    from anon, authenticated;
 
 -- ---------------------------------------------------------------- 内部小工具
 
@@ -370,6 +382,28 @@ $$;
 
 -- 搜索不会泄露：搜的是 code_norm，但返回的还是遮罩卡；命中即为"有这么个码"。
 
+-- 拒收：写一条 reject_log（只留 7 天），再把「为什么没收」返回给前端
+create or replace function public.hub_reject(
+  p_code    text,
+  p_visitor text,
+  p_reason  text,
+  p_hint    text default ''
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.reject_log (code_norm, visitor_hash, reason)
+  values (left(coalesce(p_code, ''), 32), p_visitor, left(coalesce(p_reason, ''), 120));
+
+  delete from public.reject_log where created_at < now() - interval '7 days';
+
+  return json_build_object('ok', false, 'error', coalesce(p_reason, '') || coalesce(p_hint, ''));
+end;
+$$;
+
 -- ---------------------------------------------------------------- RPC：发布
 
 create or replace function public.publish_code(
@@ -399,57 +433,57 @@ begin
     v_hint := '（这次不算回填，限制还没解除，得重新放一个有效的邀请码）';
   end if;
 
-  -- ---- 格式校验：专收小豆 6 位「字母+数字」码，乱七八糟的一律不收 ----
+  -- ---- 格式校验：专收小豆 6 位「字母+数字」码，乱七八糟的一律不收（拒收都进日志）----
   if length(v_norm) <> 6 then
-    raise exception '邀请码必须是 6 位，你填的是 % 位%', length(v_norm), v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '邀请码必须是 6 位，你填的是 ' || length(v_norm) || ' 位', v_hint);
   end if;
   if v_norm !~ '[A-Z]' or v_norm !~ '[0-9]' then
-    raise exception '邀请码必须字母和数字都有；纯字母、纯数字的码本站不收%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '邀请码必须字母和数字都有；纯字母、纯数字的码本站不收', v_hint);
   end if;
   if v_norm ~ '[A-Z]{3}' then
-    raise exception '邀请码里不能有 3 个字母连在一起（像乱填的），本站不收%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '邀请码里不能有 3 个字母连在一起（像乱填的），本站不收', v_hint);
   end if;
   if v_norm ~ '[0-9]{3}' then
-    raise exception '邀请码里不能有 3 个数字连在一起（像乱填的），本站不收%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '邀请码里不能有 3 个数字连在一起（像乱填的），本站不收', v_hint);
   end if;
   if v_norm = any (array['OPENAI','CLOUD','GOOGLE','GITHUB','DOUBAO','PYTHON','MOBILE','SERVER','WINDOW','SYSTEM','PUBLIC','MASTER','SECRET']) then
-    raise exception '这看着是英文单词，不是邀请码，本站不收%', v_hint using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor, '这看着是英文单词，不是邀请码，本站不收', v_hint);
   end if;
   if v_norm ~ '(91|78|13|27)' then
-    raise exception '邀请码里带了不合适的数字（91 / 78 / 13 / 27），本站不收%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '邀请码里带了不合适的数字（91 / 78 / 13 / 27），本站不收', v_hint);
   end if;
   if v_spots < 1 or v_spots > 30 then
-    raise exception '剩余次数必须是 1–30 的整数%', v_hint using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor, '剩余次数必须是 1–30 的整数', v_hint);
   end if;
 
   select count(*) into v_mine
     from public.invite_codes
    where creator_hash = v_visitor and status = 'available';
   if v_mine >= 1 then
-    raise exception '你放回的码还在池子里没人接走，先等它被接走（或等它下架）再放新的%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '你放回的码还在池子里没人接走，先等它被接走（或等它下架）再放新的', v_hint);
   end if;
 
   select count(*) into v_recent
     from public.publish_log
    where created_at >= now() - interval '10 minutes';
   if v_recent >= 30 then
-    raise exception '全站发布太频繁，请过几分钟再试%', v_hint using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor, '全站发布太频繁，请过几分钟再试', v_hint);
   end if;
 
   -- 被下架/删除过的码不能拿来抵回填：它已经证明是无效码
   if exists (select 1 from public.invite_codes
               where code_norm = v_norm and status = 'expired') then
-    raise exception '这个邀请码之前已经被下架了（无效码），不能拿来抵回填，换一个能用的%', v_hint
-      using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor,
+      '这个邀请码之前已经被下架了（无效码），不能拿来抵回填，换一个能用的', v_hint);
   end if;
   if exists (select 1 from public.invite_codes where code_norm = v_norm) then
-    raise exception '该邀请码已经在池里了，换个没放过的%', v_hint using errcode = 'P0001';
+    return public.hub_reject(v_norm, v_visitor, '该邀请码已经在池里了，换个没放过的', v_hint);
   end if;
 
   select coalesce(max(queue_rank), 0) + 1 into v_rank from public.invite_codes;
@@ -1129,6 +1163,52 @@ begin
 end;
 $$;
 
+-- 被拒收的提交：后台看规则有没有误杀真码
+create or replace function public.admin_rejects(p_key text, p_limit integer default 100)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_limit integer := least(greatest(coalesce(p_limit, 100), 1), 500);
+begin
+  perform public.hub_require_admin(p_key);
+  return json_build_object(
+    'total', (select count(*) from public.reject_log),
+    'today', (select count(*) from public.reject_log
+               where ((created_at at time zone 'UTC') + interval '8 hours')::date = public.hub_today()),
+    'byReason', (
+      select coalesce(json_agg(json_build_object('reason', reason, 'n', n) order by n desc), '[]'::json)
+        from (select reason, count(*) as n from public.reject_log group by reason) t
+    ),
+    'rows', (
+      select coalesce(json_agg(json_build_object(
+          'code', code_norm, 'reason', reason,
+          'who', substr(coalesce(visitor_hash, ''), 1, 8), 'at', created_at
+        ) order by created_at desc), '[]'::json)
+        from (select * from public.reject_log order by created_at desc limit v_limit) t
+    )
+  );
+end;
+$$;
+
+create or replace function public.admin_clear_rejects(p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_n integer;
+begin
+  perform public.hub_require_admin(p_key);
+  delete from public.reject_log where id > 0;
+  get diagnostics v_n = row_count;
+  return json_build_object('ok', true, 'removed', v_n);
+end;
+$$;
+
 -- ---------------------------------------------------------------- 函数授权
 
 revoke all on function public.hub_stats() from public;
@@ -1150,6 +1230,9 @@ revoke all on function public.admin_block(text, text, text) from public;
 revoke all on function public.admin_unblock(text, text) from public;
 revoke all on function public.admin_settings(text) from public;
 revoke all on function public.admin_set_autoblock(text, integer) from public;
+revoke all on function public.admin_rejects(text, integer) from public;
+revoke all on function public.admin_clear_rejects(text) from public;
+revoke all on function public.hub_reject(text, text, text, text) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -1170,6 +1253,8 @@ grant execute on function public.admin_block(text, text, text) to anon, authenti
 grant execute on function public.admin_unblock(text, text) to anon, authenticated;
 grant execute on function public.admin_settings(text) to anon, authenticated;
 grant execute on function public.admin_set_autoblock(text, integer) to anon, authenticated;
+grant execute on function public.admin_rejects(text, integer) to anon, authenticated;
+grant execute on function public.admin_clear_rejects(text) to anon, authenticated;
 
 
 

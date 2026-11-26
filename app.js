@@ -414,10 +414,12 @@
         ? rpc("list_codes", { p_status: status, p_query: q || "", p_limit: 500, p_offset: 0, p_token: visitorToken() })
         : demo.list(status, q, visitorToken());
     },
-    publish(code, spots) {
-      return MODE === "remote"
-        ? rpc("publish_code", { p_code: code, p_spots: spots, p_token: visitorToken() })
-        : demo.publish(code, spots, visitorToken());
+    async publish(code, spots) {
+      if (MODE !== "remote") return demo.publish(code, spots, visitorToken());
+      const res = await rpc("publish_code", { p_code: code, p_spots: spots, p_token: visitorToken() });
+      // 服务端把「拒收」当成正常返回（ok:false），方便它顺手记进后台的拒收日志
+      if (res && res.ok === false) throw fail(res.error || "这个邀请码本站不收");
+      return res;
     },
     reveal(id) {
       return MODE === "remote"

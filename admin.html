@@ -24,7 +24,7 @@
   .adm-gate .primary-btn { margin-top: 14px; width: 100%; }
   .adm-err { color: #c0392b; font-size: 12.5px; margin-top: 10px; }
   .adm-panel[hidden] { display: none; }
-  .adm-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .adm-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
   .adm-stat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
   .adm-stat span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .adm-stat b { font-size: 22px; font-weight: 700; }
@@ -32,6 +32,11 @@
   .adm-bar-tight { margin-bottom: 10px; }
   .adm-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
   .adm-check input { width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer; }
+  .adm-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .adm-chip { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
+              padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+              max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adm-chip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
   .adm-grace { gap: 6px; }
   .adm-grace input { width: 62px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 7px;
                      font-size: 12.5px; font-family: inherit; color: #33415c; }
@@ -108,6 +113,7 @@
       <div class="adm-stat"><span>今日揭晓</span><b id="sRevealToday">–</b></div>
       <div class="adm-stat"><span>欠码未回填</span><b id="sPending">–</b></div>
       <div class="adm-stat"><span>待处理举报</span><b id="sReports">–</b></div>
+      <div class="adm-stat"><span>今日被拒</span><b id="sRejects">–</b></div>
     </div>
 
     <div class="adm-bar">
@@ -165,6 +171,28 @@
         <tbody id="ledgerBody"></tbody>
       </table>
       <div class="adm-empty" id="ledgerEmpty" hidden>还没有人揭晓过，账本是空的。</div>
+    </div>
+
+    <div class="adm-sec">
+      <h2>被拒收录 <span id="rejCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <p class="hint">
+        提交了但不符合收录规则的码，自动记在这里（只留 7 天）。用来判断规则有没有误杀真码：
+        某条原因下如果全是长得像真的码，说明那条定得太严，放宽就行。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <div class="adm-chips" id="rejChips"></div>
+        <div class="adm-right">
+          <button class="adm-mini" id="rejReload" type="button">刷新</button>
+          <button class="adm-mini danger" id="rejClear" type="button">清空日志</button>
+        </div>
+      </div>
+      <table class="adm-table" id="rejTable">
+        <thead>
+          <tr><th>提交的码</th><th>为什么不收</th><th>设备</th><th>时间</th></tr>
+        </thead>
+        <tbody id="rejBody"></tbody>
+      </table>
+      <div class="adm-empty" id="rejEmpty" hidden>还没有被拒的记录。</div>
     </div>
   </div>
 </div>
@@ -328,6 +356,7 @@
     renderCodes();
     renderReports(data.reports || []);
     await loadLedger();
+    await loadRejects();
     return data;
   }
 
@@ -462,6 +491,69 @@
     } catch (err) {
       toast(err.message || "操作失败");
     }
+  });
+
+  /* ---------------- 被拒收录 ---------------- */
+
+  let rejects = { rows: [], byReason: [], total: 0, today: 0 };
+  let rejFilter = "";
+
+  async function loadRejects() {
+    try {
+      const r = await rpc("admin_rejects", { p_key: listKey, p_limit: 200 });
+      rejects = r || { rows: [], byReason: [], total: 0, today: 0 };
+      $("#sRejects").textContent = rejects.today != null ? rejects.today : "–";
+      renderRejects();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  function renderRejects() {
+    const all = rejects.rows || [];
+    const rows = rejFilter ? all.filter((x) => x.reason === rejFilter) : all;
+    $("#rejCount").textContent = "（7 天内 " + (rejects.total || 0) + " 条，今天 " + (rejects.today || 0) + " 条）";
+    $("#rejChips").innerHTML = (rejects.byReason || []).map((c) =>
+      '<button type="button" class="adm-chip' + (rejFilter === c.reason ? " on" : "") +
+      '" data-reject="' + esc(c.reason) + '">' + esc(c.reason) + " · " + c.n + "</button>"
+    ).join("");
+    $("#rejEmpty").hidden = rows.length > 0;
+    $("#rejTable").hidden = rows.length === 0;
+    $("#rejBody").innerHTML = rows.map((r) =>
+      "<tr>" +
+        "<td><code>" + esc(r.code) + "</code></td>" +
+        "<td style='font-size:12.5px'>" + esc(r.reason) + "</td>" +
+        '<td><code style="color:var(--muted)">' + esc(r.who || "—") + "</code></td>" +
+        "<td>" + fmtTime(r.at) + "</td>" +
+      "</tr>"
+    ).join("");
+  }
+
+  $("#rejChips").addEventListener("click", (e) => {
+    const chip = e.target.closest("button[data-reject]");
+    if (!chip) return;
+    rejFilter = rejFilter === chip.dataset.reject ? "" : chip.dataset.reject;
+    renderRejects();
+  });
+
+  $("#rejReload").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await loadRejects(); toast("拒收日志已刷新"); } finally { btn.disabled = false; }
+  });
+
+  $("#rejClear").addEventListener("click", () => {
+    askConfirm(
+      "清空拒收日志",
+      "只是删掉这份「被拒记录」，不影响池子里的码，也不影响任何人的揭晓。用于清空基线、重新观察规则误杀情况。",
+      "清空",
+      async () => {
+        const res = await rpc("admin_clear_rejects", { p_key: listKey });
+        toast("已清空 " + (res && res.removed != null ? res.removed : 0) + " 条");
+        rejFilter = "";
+        await loadRejects();
+      }
+    );
   });
 
   function enter(key) {
