@@ -664,8 +664,40 @@
     setInterval(() => { if (!document.hidden) load(); }, 20000);
   }
 
+  /* ---------------------------------------------------------- 公告 */
+
+  const NOTICE_KEY = "xd:notice:date";
+
+  function noticeSeenToday() {
+    try { return localStorage.getItem(NOTICE_KEY) === beijingDate(); } catch (e) { return false; }
+  }
+
+  function showNotice() {
+    if (noticeSeenToday()) return;
+    const box = $("#noticeModal");
+    if (!box) return;
+    box.hidden = false;
+  }
+
+  function closeNotice() {
+    const box = $("#noticeModal");
+    if (!box) return;
+    if ($("#noticeToday") && $("#noticeToday").checked) {
+      try { localStorage.setItem(NOTICE_KEY, beijingDate()); } catch (e) { /* 忽略隐私模式写入失败 */ }
+    }
+    box.hidden = true;
+  }
+
   /* ---------------------------------------------------------- 启动 */
 
   wire();
+
+  $("#noticeOk").addEventListener("click", closeNotice);
+  $("#noticeClose").addEventListener("click", closeNotice);
+  $("#noticeModal").addEventListener("click", (e) => {
+    if (e.target.id === "noticeModal") closeNotice();
+  });
+  showNotice();
+
   load();
 })();
