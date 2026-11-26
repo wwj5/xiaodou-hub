@@ -537,7 +537,8 @@
       const got = mine.get(c.id);
       return (
         '<article class="hcard">' +
-          '<div class="hcard-top"><span class="htag">可能已被使用</span>' +
+          '<div class="hcard-top"><span class="htag">' +
+            (c.status === "expired" ? "已下架" : "可能已被使用") + "</span>" +
             '<span class="hcount">' + c.claimedCount + " 次揭晓</span></div>" +
           '<div class="hcode' + (code ? " revealed" : "") + '">' + esc(code || c.mask) + "</div>" +
           '<div class="hmeta"><span>' + timeAgo(c.createdAt) + "</span>" +
