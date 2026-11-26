@@ -471,13 +471,6 @@
 
   /* ---------------------------------------------------------- 交互 */
 
-  function fillSpots() {
-    const opts = [1, 2, 3, 5, 10, 20, 30].filter((n) => n <= CFG.maxSpots);
-    $("#spotsInput").innerHTML = opts
-      .map((n) => '<option value="' + n + '"' + (n === 3 ? " selected" : "") + ">" + n + " 次</option>")
-      .join("");
-  }
-
   async function doReveal(id) {
     if (state.busy) return;
     state.busy = true;
@@ -534,7 +527,6 @@
       errBox.hidden = true;
       const raw = $("#codeInput").value;
       const code = extractCode(raw);
-      const spots = parseInt($("#spotsInput").value, 10);
       if (!code) {
         errBox.textContent = "没从这段内容里解析出邀请码，检查一下链接是否完整";
         errBox.hidden = false;
@@ -549,7 +541,7 @@
       btn.disabled = true;
       btn.textContent = "提交中…";
       try {
-        await api.publish(code, spots);
+        await api.publish(code, 1);
         $("#codeInput").value = "";
         closeShare();
         relay.done();
@@ -673,7 +665,6 @@
 
   /* ---------------------------------------------------------- 启动 */
 
-  fillSpots();
   wire();
   load();
 })();
