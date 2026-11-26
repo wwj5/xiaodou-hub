@@ -513,10 +513,12 @@
     const all = rejects.rows || [];
     const rows = rejFilter ? all.filter((x) => x.reason === rejFilter) : all;
     $("#rejCount").textContent = "（7 天内 " + (rejects.total || 0) + " 条，今天 " + (rejects.today || 0) + " 条）";
-    $("#rejChips").innerHTML = (rejects.byReason || []).map((c) =>
-      '<button type="button" class="adm-chip' + (rejFilter === c.reason ? " on" : "") +
-      '" data-reject="' + esc(c.reason) + '">' + esc(c.reason) + " · " + c.n + "</button>"
-    ).join("");
+    $("#rejChips").innerHTML = (rejects.byReason || []).map((c) => {
+      const short = String(c.reason).replace(/（[^）]*）/g, "").replace(/本站不收/g, "").trim();
+      return '<button type="button" class="adm-chip' + (rejFilter === c.reason ? " on" : "") +
+        '" data-reject="' + esc(c.reason) + '" title="' + esc(c.reason) + '">' +
+        esc(short) + " · " + c.n + "</button>";
+    }).join("");
     $("#rejEmpty").hidden = rows.length > 0;
     $("#rejTable").hidden = rows.length === 0;
     $("#rejBody").innerHTML = rows.map((r) =>
