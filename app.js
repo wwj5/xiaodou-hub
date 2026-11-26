@@ -485,6 +485,10 @@
     wmKey = key;
     layer.style.backgroundImage = 'url("' + wmTile(cfg) + '")';
     layer.style.backgroundSize = "390px 255px";
+
+    // 页脚那行说明跟着后台的字走，别让文字和水印对不上
+    const foot = $("#footWm");
+    if (foot) foot.innerHTML = "水印就是这个意思：<b>" + esc(cfg.line1) + "</b> · " + esc(cfg.line2);
   }
 
   function renderStats() {
