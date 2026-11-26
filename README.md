@@ -1,10 +1,11 @@
 # 小豆邀请码互助站（揭晓制）
 
-![小豆邀请码互助站](assets/share-cover.jpg)
+![小豆邀请码互助站](assets/share-cover-wide.jpg)
 
 **站点：https://wwj5.github.io/xiaodou-hub/**
 
-海报原图：https://wwj5.github.io/xiaodou-hub/assets/share-cover.jpg （1080×1350，126KB，可直接下载转发）
+- 横版图（1200×675，82KB）：https://wwj5.github.io/xiaodou-hub/assets/share-cover-wide.jpg
+- 竖版图（1080×1350，126KB）：https://wwj5.github.io/xiaodou-hub/assets/share-cover.jpg
 
 社区互助用的邀请码共享站，核心是**不把邀请码挂在明面上**：列表里只有遮罩和状态，
 点「揭晓」才返回明文，揭晓那一刻就标记为已领取、扣减剩余次数、消耗你自己的每日名额。
