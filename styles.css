@@ -418,6 +418,7 @@ body {
 .empty-copy h3 { margin: 0 0 5px; font-size: 16.5px; }
 .empty-copy p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
 .empty-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.empty-tip { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
 .empty-art { flex: 0 0 auto; width: 82px; height: 62px; opacity: .95; }
 
 /* ------------------------------------------------------------ 领取记录 */

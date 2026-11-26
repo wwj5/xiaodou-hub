@@ -731,6 +731,7 @@
   function wire() {
     $("#shareJump").addEventListener("click", openShare);
     $("#emptyShare").addEventListener("click", openShare);
+    if ($("#emptyRequest")) $("#emptyRequest").addEventListener("click", openRequest);
     $("#relayShare").addEventListener("click", openShare);
     $("#relayNow").addEventListener("click", openShare);
     $("#relayLater").addEventListener("click", () => ($("#relayModal").hidden = true));
