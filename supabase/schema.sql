@@ -64,6 +64,13 @@ create table if not exists public.app_settings (
   updated_at       timestamptz not null default now()
 );
 
+-- 拉黑名单：只按设备指纹，不记 IP、不记个人身份信息
+create table if not exists public.visitor_blocks (
+  visitor_hash text primary key,
+  note         text,
+  created_at   timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------- 权限：表一律不可直连
 
 alter table public.invite_codes  enable row level security;
@@ -71,12 +78,14 @@ alter table public.reports       enable row level security;
 alter table public.publish_log   enable row level security;
 alter table public.feedback      enable row level security;
 alter table public.app_settings  enable row level security;
+alter table public.visitor_blocks enable row level security;
 
 revoke all on public.invite_codes  from anon, authenticated;
 revoke all on public.reports       from anon, authenticated;
 revoke all on public.publish_log   from anon, authenticated;
 revoke all on public.feedback      from anon, authenticated;
 revoke all on public.app_settings  from anon, authenticated;
+revoke all on public.visitor_blocks from anon, authenticated;
 
 -- ---------------------------------------------------------------- 内部小工具
 
@@ -109,7 +118,25 @@ as $$
     'available',      (select count(*) from public.invite_codes where status = 'available'),
     'revealed',       (select count(*) from public.invite_codes where status <> 'available'),
     'revealedCount',  (select coalesce(sum(claimed_count), 0) from public.invite_codes),
-    'availableSpots', (select coalesce(sum(remaining_spots), 0) from public.invite_codes where status = 'available')
+    'availableSpots', (select coalesce(sum(remaining_spots), 0) from public.invite_codes where status = 'available'),
+    -- 公开只用聚合数：拿了码还没还回填的人数，不点名、不带任何可定位信息
+    'unreturned',     (
+      select count(*)
+        from (
+          select r.visitor_hash as vh, count(*) as n
+            from public.reports r
+            join public.invite_codes c on c.id = r.code_id
+           where r.action = 'reveal' and c.status <> 'expired'
+           group by 1
+        ) a
+        left join (
+          select creator_hash as vh, count(*) as n
+            from public.invite_codes
+           where creator_hash is not null and status <> 'expired'
+           group by 1
+        ) b on b.vh = a.vh
+       where a.n > coalesce(b.n, 0)
+    )
   );
 $$;
 
@@ -339,6 +366,11 @@ declare
   v_hourly   integer;
   v_remaining integer;
 begin
+  -- 被管理员限制的设备：直接拒掉，先把欠的码还上
+  if exists (select 1 from public.visitor_blocks where visitor_hash = v_visitor) then
+    raise exception '这个设备被管理员限制了揭晓：先把欠下的邀请码还回来' using errcode = 'P0001';
+  end if;
+
   select * into v_row from public.invite_codes where id = p_id for update;
   if not found then
     raise exception '这个邀请码不存在了' using errcode = 'P0001';
@@ -752,6 +784,186 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------- RPC：接力账本（仅管理员）
+
+-- 按设备指纹列账：揭晓几个、回填几个、欠几个、最后活跃时间、是否被限制
+create or replace function public.admin_ledger(
+  p_key           text,
+  p_limit         integer default 300,
+  p_only_pending  boolean default false
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_limit integer := least(greatest(coalesce(p_limit, 300), 1), 1000);
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    with rv as (
+      select r.visitor_hash as vh, count(*) as taken, max(r.created_at) as last_rev
+        from public.reports r
+        join public.invite_codes c on c.id = r.code_id
+       where r.action = 'reveal' and c.status <> 'expired'
+       group by 1
+    ),
+    pb as (
+      select c.creator_hash as vh, count(*) as returned, max(c.created_at) as last_pub
+        from public.invite_codes c
+       where c.creator_hash is not null and c.status <> 'expired'
+       group by 1
+    ),
+    v as (
+      select vh from rv union select vh from pb
+    ),
+    agg as (
+      select v.vh,
+             coalesce(rv.taken, 0) as taken,
+             coalesce(pb.returned, 0) as returned,
+             greatest(coalesce(rv.taken, 0) - coalesce(pb.returned, 0), 0) as pending,
+             greatest(coalesce(rv.last_rev, to_timestamp(0)),
+                      coalesce(pb.last_pub, to_timestamp(0))) as last_at,
+             b.visitor_hash is not null as blocked,
+             b.note
+        from v
+        left join rv on rv.vh = v.vh
+        left join pb on pb.vh = v.vh
+        left join public.visitor_blocks b on b.visitor_hash = v.vh
+    )
+    select coalesce(json_agg(
+             json_build_object(
+               'hash',    a.vh,
+               'short',   left(a.vh, 8),
+               'taken',   a.taken,
+               'returned', a.returned,
+               'pending', a.pending,
+               'lastAt',  case when a.last_at = to_timestamp(0) then null else a.last_at end,
+               'blocked', a.blocked,
+               'note',    a.note
+             )
+             order by a.pending desc, a.last_at desc
+           ), '[]'::json)
+      from (select * from agg
+             where (not coalesce(p_only_pending, false)) or pending > 0
+             order by pending desc, last_at desc
+             limit v_limit) a
+  );
+end;
+$$;
+
+-- 拉黑：可按完整指纹，也可只给前几位（要求唯一命中）
+create or replace function public.admin_block(
+  p_key   text,
+  p_hash  text,
+  p_note  text default ''
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_in    text := lower(trim(coalesce(p_hash, '')));
+  v_full  text;
+  v_hits  integer;
+begin
+  perform public.hub_require_admin(p_key);
+  if length(v_in) < 6 then
+    raise exception '指纹至少 6 位' using errcode = 'P0001';
+  end if;
+
+  select count(distinct vh) into v_hits
+    from (
+      select r.visitor_hash as vh from public.reports r
+      union
+      select c.creator_hash as vh from public.invite_codes c where c.creator_hash is not null
+    ) t
+   where t.vh = v_in or t.vh like v_in || '%';
+
+  if v_hits = 0 then
+    raise exception '找不到这个设备指纹' using errcode = 'P0001';
+  end if;
+  if v_hits > 1 then
+    raise exception '这个短码对应 % 个设备，输完整指纹，或直接点表里的「限制」', v_hits using errcode = 'P0001';
+  end if;
+
+  select vh into v_full
+    from (
+      select r.visitor_hash as vh from public.reports r
+      union
+      select c.creator_hash as vh from public.invite_codes c where c.creator_hash is not null
+    ) t
+   where t.vh = v_in or t.vh like v_in || '%'
+   limit 1;
+
+  insert into public.visitor_blocks (visitor_hash, note)
+  values (v_full, nullif(trim(coalesce(p_note, '')), ''))
+  on conflict (visitor_hash) do update
+    set note = coalesce(excluded.note, public.visitor_blocks.note);
+
+  return json_build_object('ok', true, 'hash', left(v_full, 8));
+end;
+$$;
+
+create or replace function public.admin_unblock(
+  p_key  text,
+  p_hash text
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_in   text := lower(trim(coalesce(p_hash, '')));
+  v_full text;
+  v_hits integer;
+begin
+  perform public.hub_require_admin(p_key);
+  if length(v_in) < 6 then
+    raise exception '指纹至少 6 位' using errcode = 'P0001';
+  end if;
+
+  select count(distinct vh) into v_hits
+    from (
+      select r.visitor_hash as vh from public.reports r
+      union
+      select c.creator_hash as vh from public.invite_codes c where c.creator_hash is not null
+      union
+      select b.visitor_hash as vh from public.visitor_blocks b
+    ) t
+   where t.vh = v_in or t.vh like v_in || '%';
+
+  if v_hits = 0 then
+    raise exception '找不到这个设备指纹' using errcode = 'P0001';
+  end if;
+  if v_hits > 1 then
+    raise exception '这个短码对应 % 个设备，输完整指纹', v_hits using errcode = 'P0001';
+  end if;
+
+  select vh into v_full
+    from (
+      select r.visitor_hash as vh from public.reports r
+      union
+      select c.creator_hash as vh from public.invite_codes c where c.creator_hash is not null
+      union
+      select b.visitor_hash as vh from public.visitor_blocks b
+    ) t
+   where t.vh = v_in or t.vh like v_in || '%'
+   limit 1;
+
+  delete from public.visitor_blocks where visitor_hash = v_full;
+  if not found then
+    raise exception '这个设备本来就没被限制' using errcode = 'P0001';
+  end if;
+
+  return json_build_object('ok', true, 'hash', left(v_full, 8));
+end;
+$$;
+
 -- ---------------------------------------------------------------- 函数授权
 
 revoke all on function public.hub_stats() from public;
@@ -768,6 +980,9 @@ revoke all on function public.admin_delete_code(uuid, text) from public;
 revoke all on function public.admin_clear_codes(text) from public;
 revoke all on function public.admin_resolve_report(bigint, text, boolean) from public;
 revoke all on function public.admin_set_key(text, text) from public;
+revoke all on function public.admin_ledger(text, integer, boolean) from public;
+revoke all on function public.admin_block(text, text, text) from public;
+revoke all on function public.admin_unblock(text, text) from public;
 
 grant execute on function public.hub_stats() to anon, authenticated;
 grant execute on function public.list_codes(text, text, integer, integer, text) to anon, authenticated;
@@ -783,4 +998,7 @@ grant execute on function public.admin_delete_code(uuid, text) to anon, authenti
 grant execute on function public.admin_clear_codes(text) to anon, authenticated;
 grant execute on function public.admin_resolve_report(bigint, text, boolean) to anon, authenticated;
 grant execute on function public.admin_set_key(text, text) to anon, authenticated;
+grant execute on function public.admin_ledger(text, integer, boolean) to anon, authenticated;
+grant execute on function public.admin_block(text, text, text) to anon, authenticated;
+grant execute on function public.admin_unblock(text, text) to anon, authenticated;
 

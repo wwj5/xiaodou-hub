@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=14" />
+<link rel="stylesheet" href="styles.css?v=25" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -24,11 +24,14 @@
   .adm-gate .primary-btn { margin-top: 14px; width: 100%; }
   .adm-err { color: #c0392b; font-size: 12.5px; margin-top: 10px; }
   .adm-panel[hidden] { display: none; }
-  .adm-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .adm-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
   .adm-stat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
   .adm-stat span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .adm-stat b { font-size: 22px; font-weight: 700; }
   .adm-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .adm-bar-tight { margin-bottom: 10px; }
+  .adm-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+  .adm-check input { width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer; }
   .adm-tab { appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted);
              padding: 6px 12px; border-radius: 999px; font-size: 13px; font-family: inherit; cursor: pointer; }
   .adm-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -100,6 +103,7 @@
       <div class="adm-stat"><span>累计发放</span><b id="sIssued">–</b></div>
       <div class="adm-stat"><span>当前可揭</span><b id="sAvailable">–</b></div>
       <div class="adm-stat"><span>今日揭晓</span><b id="sRevealToday">–</b></div>
+      <div class="adm-stat"><span>欠码未回填</span><b id="sPending">–</b></div>
       <div class="adm-stat"><span>待处理举报</span><b id="sReports">–</b></div>
     </div>
 
@@ -128,6 +132,30 @@
       <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
       <div id="reportList"></div>
       <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
+    </div>
+
+    <div class="adm-sec">
+      <h2>接力账本 <span id="ledgerCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <p class="hint">
+        按设备指纹统计（浏览器本地算的匿名 ID，不记 IP、不记姓名、不可反查真人）：
+        揭晓几个、回填几个、欠几个，欠码的排最前。限制后这人再点「揭晓」会被直接拒绝。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <label class="adm-check"><input type="checkbox" id="ledgerOnly" /> 只看欠码的</label>
+        <div class="adm-right">
+          <button class="adm-mini" id="ledgerReload" type="button">刷新账本</button>
+          <button class="adm-mini" id="ledgerExport" type="button">导出 CSV</button>
+        </div>
+      </div>
+      <table class="adm-table" id="ledgerTable">
+        <thead>
+          <tr>
+            <th>设备指纹</th><th>揭晓</th><th>回填</th><th>欠</th><th>最后活跃</th><th>状态</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+      <div class="adm-empty" id="ledgerEmpty" hidden>还没有人揭晓过，账本是空的。</div>
     </div>
   </div>
 </div>
@@ -290,8 +318,120 @@
     renderStats(data);
     renderCodes();
     renderReports(data.reports || []);
+    await loadLedger();
     return data;
   }
+
+  /* ---------------- 接力账本 ---------------- */
+
+  let ledger = [];
+
+  async function loadLedger() {
+    try {
+      const rows = await rpc("admin_ledger", {
+        p_key: listKey,
+        p_limit: 500,
+        p_only_pending: $("#ledgerOnly").checked,
+      });
+      ledger = rows || [];
+      renderLedger();
+    } catch (err) {
+      onFail(err);
+    }
+  }
+
+  function ledgerState(r) {
+    if (r.blocked) return '<span class="adm-tag expired">已限制</span>';
+    if (r.pending > 0) return '<span class="adm-tag used">欠 ' + r.pending + " 个</span>";
+    return '<span class="adm-tag available">正常</span>';
+  }
+
+  function renderLedger() {
+    const pendingN = ledger.filter((r) => r.pending > 0).length;
+    $("#sPending").textContent = pendingN;
+    $("#ledgerCount").textContent = ledger.length
+      ? "（" + ledger.length + " 台设备，其中 " + pendingN + " 台欠码）"
+      : "";
+    $("#ledgerEmpty").hidden = ledger.length > 0;
+    $("#ledgerTable").hidden = ledger.length === 0;
+    $("#ledgerBody").innerHTML = ledger.map((r) => {
+      const act = r.blocked
+        ? '<button class="adm-mini" data-ledger="unblock" data-hash="' + esc(r.hash) + '">解除限制</button>'
+        : '<button class="adm-mini danger" data-ledger="block" data-hash="' + esc(r.hash) + '">限制揭晓</button>';
+      return "<tr>" +
+        '<td><code title="' + esc(r.hash) + '">' + esc(r.short) + "…</code></td>" +
+        "<td>" + r.taken + "</td>" +
+        "<td>" + r.returned + "</td>" +
+        '<td>' + (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
+        "<td>" + (r.lastAt ? fmtTime(r.lastAt) : "—") + "</td>" +
+        "<td>" + ledgerState(r) + "</td>" +
+        '<td><div class="adm-act">' + act + "</div></td></tr>";
+    }).join("");
+  }
+
+  function csvCell(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  $("#ledgerOnly").addEventListener("change", () => { loadLedger(); });
+
+  $("#ledgerReload").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await loadLedger(); toast("账本已刷新"); } catch (err) { onFail(err); } finally { btn.disabled = false; }
+  });
+
+  $("#ledgerExport").addEventListener("click", () => {
+    if (!ledger.length) { toast("账本是空的，没东西可导"); return; }
+    const head = ["设备指纹", "揭晓", "回填", "欠", "最后活跃", "状态", "备注"];
+    const rows = ledger.map((r) => [
+      r.hash, r.taken, r.returned, r.pending,
+      r.lastAt ? new Date(r.lastAt).toLocaleString("zh-CN") : "",
+      r.blocked ? "已限制" : (r.pending > 0 ? "欠码" : "正常"),
+      r.note || "",
+    ]);
+    const csv = "\ufeff" + [head].concat(rows).map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const d = new Date();
+    const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    a.download = "接力账本-" + stamp + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  });
+
+  $("#ledgerBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-ledger]");
+    if (!btn || btn.disabled) return;
+    const hash = btn.dataset.hash;
+    const row = ledger.find((r) => r.hash === hash);
+    const short = row ? row.short : hash.slice(0, 8);
+
+    if (btn.dataset.ledger === "block") {
+      askConfirm(
+        "限制这台设备揭晓",
+        "指纹 " + short + "… 之后再点「揭晓」会被直接拒绝，提示先把欠的邀请码还回来。" +
+        "只作用于这个匿名设备指纹，不涉及 IP、不涉及真实身份，随时可以解除。",
+        "限制揭晓",
+        async () => {
+          await rpc("admin_block", { p_key: listKey, p_hash: hash, p_note: row && row.pending ? ("欠 " + row.pending + " 个") : "" });
+          toast("已限制 " + short + "…");
+          await load();
+        }
+      );
+      return;
+    }
+
+    try {
+      await rpc("admin_unblock", { p_key: listKey, p_hash: hash });
+      toast("已解除限制 " + short + "…");
+      await load();
+    } catch (err) {
+      toast(err.message || "操作失败");
+    }
+  });
 
   function enter(key) {
     listKey = key;
@@ -482,3 +622,4 @@
 </script>
 </body>
 </html>
+

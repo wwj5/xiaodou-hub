@@ -431,6 +431,13 @@
   function renderStats() {
     $("#statIssued").textContent = state.stats.issued ?? "—";
     $("#statAvailable").textContent = state.stats.available ?? "—";
+    // 只放聚合数，不点名、不带任何可定位信息
+    const un = Number(state.stats.unreturned || 0);
+    const note = $("#unreturnedNote");
+    if (note) {
+      note.hidden = un <= 0;
+      note.textContent = un > 0 ? "（有 " + un + " 人拿了码还没放回来）" : "";
+    }
   }
 
   function renderEmpty(show) {
