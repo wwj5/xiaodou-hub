@@ -294,8 +294,8 @@
       }
       const total = s.revealTotal[token] || 0;
       const published = s.codes.filter((c) => c.creator === token).length;
-      if (total >= 2 && published === 0) {
-        throw fail("接力规则：你已经接过 2 个邀请码，还没往池子里放过码。先分享一个自己的码，再继续揭晓");
+      if (total >= published + 1) {
+        throw fail("接力规则：你已经接过 " + total + " 个码，只放回 " + published + " 个。先把自己的码分享进来，才能继续揭晓");
       }
       const row = s.codes.find((c) => c.id === id);
       if (!row) throw fail("这个邀请码不存在了");
@@ -383,7 +383,7 @@
     strip.hidden = pending <= 0;
     if (pending > 0) {
       $("#relayText").textContent =
-        "你已经从池子里接过 " + pending + " 个码，等你的邀请码下来了，也放回来给下一个人。";
+        "你从池子里接过 " + pending + " 个码还没还。先把你的邀请码放回来，才能接下一个。";
     }
   }
 

@@ -350,14 +350,13 @@ begin
   select count(*) into v_total_n
     from public.reports
    where visitor_hash = v_visitor and action = 'reveal';
-  if v_total_n >= 2 then
-    select count(*) into v_pub_n
-      from public.publish_log
-     where visitor_hash = v_visitor;
-    if v_pub_n = 0 then
-      raise exception '接力规则：你已经接过 2 个邀请码，还没往池子里放过码。先分享一个自己的码，再继续揭晓'
-        using errcode = 'P0001';
-    end if;
+  -- 接力规则：第一个码免费接，之后"接过 N 个"必须至少放回 N-1 个
+  select count(*) into v_pub_n
+    from public.publish_log
+   where visitor_hash = v_visitor;
+  if v_total_n >= v_pub_n + 1 then
+    raise exception '接力规则：你已经接过 % 个邀请码，只放回 % 个。先把自己的邀请码分享进来，才能继续揭晓',
+      v_total_n, v_pub_n using errcode = 'P0001';
   end if;
 
   v_remaining := v_row.remaining_spots - 1;
