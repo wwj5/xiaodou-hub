@@ -456,6 +456,9 @@
         : "先把你的邀请码放回来，才能接下一个。";
       $("#relayText").textContent =
         "你从池子里接过 " + pending + " 个码还没还。" + tail;
+    } else if (state.relay && state.relay.blocked) {
+      $("#relayText").textContent = "这台设备已被限制揭晓：先把自己的邀请码放回来，放回后自动解除。";
+      strip.hidden = false;
     }
   }
 
@@ -464,6 +467,7 @@
     renderEmpty(state.avail.length === 0);
     if (!state.avail.length) { list.innerHTML = ""; return; }
 
+    const blocked = !!(state.relay && state.relay.blocked);
     list.innerHTML = state.avail.map((c) => {
       const got = mine.get(c.id);
       const cls = got ? " mine" : "";
@@ -471,7 +475,9 @@
       const tag = got ? '<span class="cc-tag done">已领取</span>' : '<span class="cc-tag">可揭晓</span>';
       const actions = got
         ? '<button class="mini-btn solid" data-act="copy" data-id="' + esc(c.id) + '">复制</button>'
-        : '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">点击揭晓</button>';
+        : (blocked
+          ? '<button class="mini-btn ghost" type="button" disabled title="先把自己的邀请码放回来">先回填自己的码</button>'
+          : '<button class="mini-btn solid" data-act="reveal" data-id="' + esc(c.id) + '">点击揭晓</button>');
       return (
         '<article class="code-card' + cls + '">' +
           '<div class="cc-top"><span class="cc-rank">#' + c.queueRank + "</span>" + tag + "</div>" +
