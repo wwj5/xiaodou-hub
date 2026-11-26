@@ -717,9 +717,14 @@
 
   $("#howOpen").addEventListener("click", openHow);
   $("#howOpenTop").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
-  $("#footAbout").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
   $("#footHow").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
   $("#footDisclaimer").addEventListener("click", (e) => { e.preventDefault(); openHow(); });
+  $("#emptyHow").addEventListener("click", openHow);
+  $("#noticeHow").addEventListener("click", (e) => {
+    e.preventDefault();
+    closeNotice();
+    openHow();
+  });
   $("#howClose").addEventListener("click", closeHow);
   $("#howOk").addEventListener("click", closeHow);
   $("#howGo").addEventListener("click", () => {

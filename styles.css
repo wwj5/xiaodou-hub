@@ -405,30 +405,14 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 20px;
+  padding: 20px 22px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: linear-gradient(120deg, var(--blue-soft), transparent 70%);
+  background: linear-gradient(120deg, var(--blue-soft), transparent 72%);
 }
-.empty-copy h3 { margin: 0 0 4px; font-size: 16.5px; }
-.empty-copy p { margin: 0; font-size: 13px; color: var(--muted); }
-.empty-note {
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--blue);
-  color: #fff;
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background .15s ease;
-}
-.empty-note:hover { background: var(--blue-dark); }
-.empty-note::before { content: "＋"; font-weight: 700; }
+.empty-copy h3 { margin: 0 0 5px; font-size: 16.5px; }
+.empty-copy p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.empty-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .empty-art { flex: 0 0 auto; width: 82px; height: 62px; opacity: .95; }
 
 /* ------------------------------------------------------------ 领取记录 */
@@ -631,13 +615,9 @@ input::placeholder { color: var(--muted-2); }
 .notice-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted);
                 cursor: pointer; user-select: none; }
 .notice-check input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
-.notice-how { margin: 2px 0 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--blue-soft); }
-.notice-how b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 8px; }
-.notice-how span { display: block; font-size: 12.5px; color: #3c4a63; line-height: 1.7; }
-@media (prefers-color-scheme: dark) {
-  .notice-how { background: #18233a; }
-  .notice-how span { color: var(--muted); }
-}
+.notice-more { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+.notice-more a { color: var(--blue); text-decoration: none; font-weight: 600; }
+.notice-more a:hover { text-decoration: underline; }
 
 .icon-btn {
   appearance: none; border: 0; background: transparent;
