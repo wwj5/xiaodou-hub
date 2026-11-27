@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=47" />
+<link rel="stylesheet" href="styles.css?v=48" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -564,6 +564,10 @@
   .cl-md, .cl-sm { display: inline-block; white-space: normal; line-height: 1.55; vertical-align: top; word-break: break-word; }
   .cl-md { max-width: 280px; }
   .cl-sm { max-width: 170px; }
+  .adm-table td.cell-city { max-width: 216px; }
+  .cl-city { display: inline-block; max-width: 196px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; vertical-align: middle; }
+  #metaTable { min-width: 700px; }
   .adm-table td.cell-time { color: #6b7688; font-size: 12.5px; }
   .adm-table td.cell-num { text-align: right; font-variant-numeric: tabular-nums; }
   .adm-table td.cell-ops { white-space: nowrap; }
@@ -597,6 +601,9 @@
   .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
   .chart-box { width: 100%; }
   .chart-box canvas { width: 100%; display: block; }
+.dev-model { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 5px;
+  background: #eef2fb; color: #3d5680; font-size: 11px; line-height: 1.5; vertical-align: middle;
+  white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -826,19 +833,20 @@
         <div class="pg-card">
           <div class="pg-head"><h2>设备档案 <span id="metaCount" style="color:var(--muted);font-weight:400"></span></h2></div>
 <p class="hint">
-        每台设备最近一次来访记下的 IP 和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
-        点「补全城市」会把带 IP 的设备送去解析归属地（走 ipwho.is，免费公开接口），解析完写回库里。
+        每台设备最近一次来访记下的 IP、机型和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
+        进这一页会自动把还没城市的设备送去解析（走公开的 IP 归属地接口，ipwho.is → zxinc → ipapi.co 逐个试）并写回库里，不用再手点。
       </p>
       <div class="adm-bar adm-bar-tight">
         <div class="adm-right">
           <button class="adm-mini" id="metaReload" type="button">刷新档案</button>
-          <button class="adm-mini" id="metaCity" type="button">补全城市</button>
+          <button class="adm-mini" id="metaCity" type="button">重新解析</button>
         </div>
       </div>
+      <p class="hint" id="metaCityTip" hidden></p>
       <div class="tbl-scroll">
       <table class="adm-table" id="metaTable">
         <thead>
-          <tr><th>设备</th><th>城市</th><th>IP</th><th>浏览器</th><th>来访</th><th>最后活跃</th></tr>
+          <tr><th>设备 / 机型</th><th>城市</th><th>IP</th><th>浏览器</th><th>最后活跃（来访）</th></tr>
         </thead>
         <tbody id="metaBody"></tbody>
       </table>
@@ -1074,6 +1082,13 @@
     return Math.round(diff / 86400) + " 天前";
   }
 
+  /* 设备指纹 + 型号：后台所有列设备的地方统一走这里 */
+  function devTag(hash, short, model, ua) {
+    const extra = String(model || "").trim() || String(ua || "").trim();
+    return '<code title="' + esc(hash) + '">' + esc(short) + "…</code>" +
+      (extra ? ' <span class="dev-model">' + esc(extra) + "</span>" : "");
+  }
+
   async function loadMeta() {
     const rows = await rpc("admin_meta", { p_key: listKey, p_limit: 300 });
     metaRows = Array.isArray(rows) ? rows : [];
@@ -1082,24 +1097,22 @@
     $("#metaTable").hidden = metaRows.length === 0;
     $("#metaBody").innerHTML = metaRows.map((m) => (
       "<tr>" +
-        '<td><code title="' + esc(m.hash) + '">' + esc(m.short) + "…</code></td>" +
-        '<td class="cell-long"><span class="cl-sm" title="' + esc(m.city) + '">' + (m.city ? esc(m.city) : '<span style="color:#9aa4b6">未解析</span>') + "</span></td>" +
+        "<td>" + devTag(m.hash, m.short, m.model, "") + "</td>" +
+        '<td class="cell-city"><span class="cl-city" title="' + esc(m.city) + '">' +
+          (m.city ? esc(m.city) : '<span style="color:#9aa4b6">未解析</span>') + "</span></td>" +
         '<td style="font-size:12px;color:var(--muted)">' + esc(m.ip || m.ipMasked || "—") + "</td>" +
         '<td style="font-size:12px">' + esc(m.ua || "—") + "</td>" +
-        "<td>" + m.hits + " 次</td>" +
-        '<td class="cell-time">' + metaTime(m.lastSeen) + "</td>" +
+        '<td class="cell-time">' + metaTime(m.lastSeen) +
+          ' <span style="color:#9aa4b6">· ' + m.hits + " 次</span></td>" +
       "</tr>"
     )).join("");
   }
 
-  /* 只把有 IP、还没解析过城市的设备送去 ipwho.is，串行 + 间隔，别把免费接口打挂 */
-  async function fillCities() {
-    const todo = metaRows.filter((m) => m.ip && !m.city);
-    if (!todo.length) { toast("没有需要解析的设备"); return; }
-    const out = [];
-    for (const m of todo) {
-      try {
-        const r = await fetch("https://ipwho.is/" + encodeURIComponent(m.ip) + "?lang=zh-CN", { cache: "no-store" });
+  /* 查 IP 归属地：ipwho.is 中文优先，被限流就换 zxinc（中文），再兜 ipapi.co（英文） */
+  async function geoCity(ip) {
+    try {
+      const r = await fetch("https://ipwho.is/" + encodeURIComponent(ip) + "?lang=zh-CN", { cache: "no-store" });
+      if (r.ok) {
         const j = await r.json();
         if (j && j.success) {
           const parts = [];
@@ -1107,16 +1120,84 @@
           if (j.region && j.region !== j.city) parts.push(j.region);
           if (j.city) parts.push(j.city);
           const city = parts.filter(Boolean).join(" ");
-          if (city) out.push({ hash: m.hash, city: city.slice(0, 60) });
+          if (city) return city;
         }
+      }
+    } catch (err) { /* 换下一个源 */ }
+
+    try {
+      const r = await fetch("https://ip.zxinc.org/api.php?type=json&ip=" + encodeURIComponent(ip), { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        const raw = String((j && j.data && (j.data.country || j.data.location)) || "");
+        const parts = raw.split(/[\u2013\u2014-]/).map((s) => s.replace(/\s+/g, "")).filter(Boolean);
+        const keep = parts.filter((p) => p !== "中国");
+        if (keep.length) return keep.join(" ");
+        if (raw.trim()) return raw.trim();
+      }
+    } catch (err) { /* 换下一个源 */ }
+
+    try {
+      const r = await fetch("https://ipapi.co/" + encodeURIComponent(ip) + "/json/", { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && !j.error) {
+          const parts = [j.country_name, j.region, j.city].filter(Boolean);
+          if (parts.length) return parts.join(" ");
+        }
+      }
+    } catch (err) { /* 全挂就返回空 */ }
+
+    return "";
+  }
+
+  /* 只把有 IP、还没解析过城市的设备送去解析，串行 + 间隔，别把免费接口打挂 */
+  async function fillCities(silent) {
+    const todo = metaRows.filter((m) => m.ip && !m.city);
+    if (!todo.length) { if (!silent) toast("没有需要解析的设备"); return 0; }
+    const out = [];
+    for (const m of todo.slice(0, 20)) {
+      try {
+        const city = await geoCity(m.ip);
+        if (city) out.push({ hash: m.hash, city: city.slice(0, 60) });
       } catch (err) { /* 单条失败不影响其它 */ }
-      await new Promise((r) => setTimeout(r, 180));
+      await new Promise((r) => setTimeout(r, 500));
     }
-    if (!out.length) { toast("一个都没解析出来，稍再试（免费接口有频率限制）"); return; }
+    if (!out.length) {
+      if (!silent) toast("一个都没解析出来，稍再试（免费接口有频率限制）");
+      return 0;
+    }
     const res = await rpc("admin_set_cities", { p_key: listKey, p_map: out });
     if (res && res.ok === false) throw new Error(res.error || "写回失败");
-    toast("已补全 " + (res.updated || out.length) + " 台设备的城市");
+    const n = res.updated || out.length;
+    if (!silent) toast("已补全 " + n + " 台设备的城市");
     await loadMeta();
+    return n;
+  }
+
+  /* 进「设备档案」就自己补城市，不用手点；一次只跑一轮，防重复 */
+  let cityFilling = false;
+  async function autoFillCities() {
+    if (cityFilling) return;
+    if (!metaRows.length) { try { await loadMeta(); } catch (e) { return; } }
+    const todo = metaRows.filter((m) => m.ip && !m.city);
+    if (!todo.length) return;
+    cityFilling = true;
+    const tip = $("#metaCityTip");
+    if (tip) {
+      tip.hidden = false;
+      tip.textContent = "正在自动解析 " + todo.length + " 台设备的归属地（逐个查 ipwho.is，十几秒）…";
+    }
+    try {
+      const n = await fillCities(true);
+      if (tip) tip.textContent = n ? "已自动补全 " + n + " 台" : "这次没解析出来（免费接口有频率限制，过会儿刷新再试）";
+      if (tip) setTimeout(() => { tip.hidden = true; }, 6000);
+    } catch (err) {
+      console.error("AUTOCITY", err);
+      if (tip) { tip.textContent = "自动解析失败：" + (err.message || "网络问题"); }
+    } finally {
+      cityFilling = false;
+    }
   }
 
   $("#metaReload").addEventListener("click", async (e) => {
@@ -1146,7 +1227,7 @@
     if (!btn || btn.disabled) return;
     const row = reqRows.find((r) => String(r.id) === btn.dataset.id);
     if (!row) return;
-    const who = row.contact + "（设备 " + row.short + "…）";
+    const who = row.contact + "（设备 " + row.short + "…" + (row.model ? " · " + row.model : "") + "）";
 
     if (btn.dataset.req === "reject") {
       askConfirm("拒掉这条申请", "申请人：" + who + "。拒掉之后他今天还能再申请，只是这条不再等你处理。", "拒绝", async () => {
@@ -1547,7 +1628,7 @@
           (list.length === 8 ? ' <span class="muted">…</span>' : "") + "</td>";
       };
       return "<tr>" +
-        '<td><code title="' + esc(r.hash) + '">' + esc(r.short) + "…</code></td>" +
+        "<td>" + devTag(r.hash, r.short, r.model, r.ua) + "</td>" +
         codeCell(r.gotCodes, "got") +
         codeCell(r.gaveCodes, "gave") +
         "<td>" + r.taken + " / " + r.returned + "</td>" +
@@ -1915,7 +1996,8 @@
     if (el) el.textContent = PG_TITLE[name] || "";
     $("#admSide").classList.remove("open");
     if (name === "chat") loadChatThreads().catch((e) => console.error("CHATLOAD", e));
-    if (name === "dash") setTimeout(drawCharts, 40);;
+    if (name === "dash") setTimeout(drawCharts, 40);
+    if (name === "meta") setTimeout(autoFillCities, 350);
     if (history.replaceState) history.replaceState(null, "", "#" + name);
   }
 

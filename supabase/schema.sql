@@ -128,11 +128,15 @@ create table if not exists public.visitor_meta (
   city         text,
   city_at      timestamptz,
   ua_short     text,
+  device_model text,
   first_seen   timestamptz not null default now(),
   last_seen    timestamptz not null default now(),
   hits         integer not null default 0
 );
 create index if not exists ix_visitor_meta_seen on public.visitor_meta (last_seen desc);
+
+-- 老库补列（幂等）
+alter table public.visitor_meta add column if not exists device_model text;
 
 alter table public.visitor_meta enable row level security;
 revoke all on public.visitor_meta from anon, authenticated;
@@ -195,6 +199,28 @@ as $$
   end;
 $$;
 
+-- 从 UA 里抠设备型号：安卓能拿到具体机型，iPhone / iPad 只能到系列
+create or replace function public.hub_device_model(p_ua text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_ua is null or btrim(p_ua) = '' then ''
+    when p_ua ilike '%iphone%' then 'iPhone'
+    when p_ua ilike '%ipad%' then 'iPad'
+    when p_ua ilike '%harmonyos%' or p_ua ilike '%openharmony%' then 'HarmonyOS'
+    when p_ua ~* 'Build/' then
+      left(btrim((regexp_match(p_ua, ';\s*([^;()]+?)\s+Build/'))[1]), 40)
+    when p_ua ilike '%windows nt 10%' then 'Windows 10/11'
+    when p_ua ilike '%windows%' then 'Windows'
+    when p_ua ilike '%macintosh%' then 'Mac'
+    when p_ua ilike '%android%' then '安卓'
+    when p_ua ilike '%linux%' then 'Linux'
+    else ''
+  end;
+$$;
+
 -- 每次有设备动一下就记一笔（取 Supabase 网关透传的 x-forwarded-for）
 -- 旧的一参数签名先清掉，避免和新版并存造成调用歧义
 drop function if exists public.hub_touch(text);
@@ -239,15 +265,17 @@ begin
   end;
 
   insert into public.visitor_meta as m
-    (visitor_hash, ip_full, ip_masked, ua_short, first_seen, last_seen, hits)
+    (visitor_hash, ip_full, ip_masked, ua_short, device_model, first_seen, last_seen, hits)
   values
-    (p_visitor, v_addr, public.hub_mask_ip(v_ip), public.hub_ua_short(v_ua), now(), now(), 1)
+    (p_visitor, v_addr, public.hub_mask_ip(v_ip), public.hub_ua_short(v_ua),
+     public.hub_device_model(v_ua), now(), now(), 1)
   on conflict (visitor_hash) do update
-    set ip_full   = coalesce(excluded.ip_full, m.ip_full),
-        ip_masked = coalesce(nullif(excluded.ip_masked, ''), m.ip_masked),
-        ua_short  = coalesce(nullif(excluded.ua_short, ''), m.ua_short),
-        last_seen = now(),
-        hits      = m.hits + 1;
+    set ip_full      = coalesce(excluded.ip_full, m.ip_full),
+        ip_masked    = coalesce(nullif(excluded.ip_masked, ''), m.ip_masked),
+        ua_short     = coalesce(nullif(excluded.ua_short, ''), m.ua_short),
+        device_model = coalesce(nullif(excluded.device_model, ''), m.device_model),
+        last_seen    = now(),
+        hits         = m.hits + 1;
 end;
 $$;
 
@@ -1272,6 +1300,8 @@ begin
              greatest(coalesce(rv.last_rev, to_timestamp(0)),
                       coalesce(pb.last_pub, to_timestamp(0))) as last_at,
              rv.got, pb.gave,
+             coalesce(vm.device_model, '') as device_model,
+             coalesce(vm.ua_short, '') as ua_short,
              b.visitor_hash is not null as blocked,
              coalesce(b.kind, '') as block_kind,
              b.note
@@ -1279,11 +1309,14 @@ begin
         left join rv on rv.vh = v.vh
         left join pb on pb.vh = v.vh
         left join public.visitor_blocks b on b.visitor_hash = v.vh
+        left join public.visitor_meta vm on vm.visitor_hash = v.vh
     )
     select coalesce(json_agg(
              json_build_object(
                'hash',    a.vh,
                'short',   left(a.vh, 8),
+               'model',   coalesce(a.device_model, ''),
+               'ua',      coalesce(a.ua_short, ''),
                'taken',   a.taken,
                'returned', a.returned,
                'pending', a.pending,
@@ -1683,6 +1716,8 @@ begin
       'rows', (select coalesce(json_agg(json_build_object(
                  'id', rd.id,
                  'short', left(rd.vh, 8),
+                 'model', (select coalesce(device_model, '') from public.visitor_meta
+                            where visitor_hash = rd.vh limit 1),
                  'contact', rd.contact,
                  'note', rd.note,
                  'createdAt', rd.created_at,
@@ -1854,6 +1889,7 @@ begin
     select coalesce(json_agg(
              json_build_object(
                'short',    left(a.vh, 8),
+               'model',    coalesce(m.device_model, ''),
                'city',     coalesce(nullif(m.city, ''), ''),
                'ipMasked', coalesce(nullif(m.ip_masked, ''), ''),
                'ua',       coalesce(nullif(m.ua_short, ''), ''),
@@ -1897,6 +1933,7 @@ begin
                'ipMasked', coalesce(m.ip_masked, ''),
                'city',    coalesce(m.city, ''),
                'ua',      coalesce(m.ua_short, ''),
+               'model',   coalesce(m.device_model, ''),
                'firstSeen', m.first_seen,
                'lastSeen',  m.last_seen,
                'hits',    m.hits
