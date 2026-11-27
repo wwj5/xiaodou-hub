@@ -626,8 +626,8 @@
     wrap.hidden = false;
     $("#debtsNote").textContent = rows.length + " 台设备还欠着";
     list.innerHTML = rows.map((d) => {
-      const where = [d.city, d.ipMasked].filter(Boolean).join(" · ") || "地址未知";
-      const dev = d.ua || "设备未知";
+      const where = [d.city, d.ipMasked].filter(Boolean).join(" · ") || "早期欠账 · 没留下地址";
+      const dev = d.ua || "设备不详";
       const last = d.lastCode ? "最近揭走 " + esc(d.lastCode) : "最近有过动作";
       return (
         '<li class="debt-row">' +
