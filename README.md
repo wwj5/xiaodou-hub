@@ -176,6 +176,10 @@
 
 - 输入管理密码 → `admin_verify` 校验，密码只存 sessionStorage，关浏览器即失效；
 - 六张统计卡：累计发放 / 当前可揭 / 今日揭晓 / 欠码未回填 / 待处理举报 / 今日被拒；
+- **仪表盘图表**（`admin_charts`）：近 N 天（默认 7）的折线图看揭晓 / 发布 / 申请三条线走成什么样，
+  柱状图看每天新来几台设备；纯 canvas 手画，不引任何图表库，宽屏两图并排、窄屏自动堆叠，窗口变化会自己重画；
+- **库里的表**（`admin_tables`）：把库里 11 张表的记录数按多少排出来，附一句「这张表干什么的」，
+  用来快速判断哪张表在涨、哪张一直空着；
 - **发码申请**（`admin_requests` / `admin_send_code` / `admin_resolve_request`）：待发码列表带「揭/回/欠」和联系方式，点「发码」自动取池里顺位最前的码、标成已用、记进领取记录，明文弹出来可复制；也能拒绝。顶部可切「人工发码 / 自动揭晓」；
 - 全量码表（明文、状态、剩余/总、顺位、已揭、发布时间），每行可「下架 / 恢复 / 置顶 / 删除」；
 - 待处理举报列表，可「标记已处理」，或「下架该码并处理」一键联动；
@@ -195,8 +199,8 @@
 - **设备档案**（`admin_meta` / `admin_set_cities`）：每台来过本站的设备一行，显示完整 IP、脱敏 IP 段、
   解析出的城市、浏览器设备标签、来访次数、最后活跃。点「补全城市」会把还没解析的设备逐个送到
   ipwho.is（中文返回）查归属地，再写回库里——一次几十台，串行带间隔，不占带宽也不打爆免费接口。
-- **页面水印**（`admin_set_watermark`）：首页那层斜向水印的两行文字、透明度（0–0.35）在后台改，
-  保存即生效、不用重新部署；前端用 canvas 现场画成平铺图，文字最多 40 字，可一键恢复默认。
+- **页面水印**（`admin_set_watermark`）：一个多行框填首页那层斜向水印（最多两行、每行 40 字，换行就回车一下，写完再按回车直接保存），下面是透明度滑块（0–0.35），
+  保存即生效、不用重新部署；前端用 canvas 现场画成平铺图，还能一键恢复默认。
 - **客服聊天**（`admin_chat_list` / `admin_chat_fetch` / `admin_chat_reply` / `admin_chat_close`）：
   左边一列是会话（昵称或设备短指纹 + 城市 + 机型 + 最后一句 + 未读数），点开右边出完整对话，
   回车换行、Ctrl+Enter 发送，能把会话「结束」或重新打开（结束只是挡住访客再发，记录不删）。
@@ -207,8 +211,11 @@
 对应 RPC：`admin_list`、`admin_delete_code`、`admin_clear_codes`、`admin_resolve_report`、`admin_set_key`、
 `admin_ledger`、`admin_block`、`admin_unblock`、`admin_settings`、`admin_set_autoblock`、`admin_rejects`、
 `admin_clear_rejects`、`admin_set_watermark`、`admin_purge_bad`、`admin_set_reveal_mode`、`admin_meta`、`admin_set_cities`、`admin_chat_list`、
-`admin_chat_fetch`、`admin_chat_reply`、`admin_chat_close`（都先过 `hub_require_admin`，
+`admin_chat_fetch`、`admin_chat_reply`、`admin_chat_close`、`admin_tables`、`admin_charts`（都先过 `hub_require_admin`，
 anon 可调但没密码就是「管理密码不对」）。
+
+后台里凡是成列的数据（码表 / 申请 / 举报 / 账本 / 设备 / 被拒）都是真表格：短列不换行、长列
+（留言、限制原因）在格子里限宽换行，窗口窄到装不下时整块横向滚动，不会再把一个字挤成一行。
 
 ## 九、本地预览
 
