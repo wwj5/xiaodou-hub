@@ -1,8 +1,8 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  # 站点已下线（GitHub Pages 已 unpublish），push 不再自动部署。
+  # 想重新上线：Settings -> Pages 先发布一次，再在这里手动点 Run workflow。
   workflow_dispatch:
 
 permissions:

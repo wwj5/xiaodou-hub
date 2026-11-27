@@ -1,5 +1,9 @@
 # 小豆邀请码互助站（申请制 · 默认人工发码）
 
+> **当前状态（2026-11-27）**：GitHub Pages 已下线（unpublish），`wwj5.github.io/xiaodou-hub/` 不再提供服务。
+> 仓库只作为源码和数据库结构的存档保留；`pages.yml` 的 push 触发也已注释掉，推送代码不会再部署。
+> 想重新上线：Settings → Pages 选 GitHub Actions → 到 Actions 里手动跑一次 `Deploy to GitHub Pages`。
+
 <img alt="小豆邀请码互助站" src="assets/share-cover-wide.jpg" width="600">
 
 <p>
@@ -166,7 +170,7 @@
 | 管理密码 | 只写在本地 `.supabase-keys.txt` 的 `admin_key` 一行（已 gitignore，不进仓库） |
 | 数据库密码 | 只写在本地 `.supabase-db-password.txt`（已 gitignore）；丢了可在 Dashboard → Settings → Database 重置 |
 
-改代码后 `git push origin main`，GitHub Actions 自动重跑并发布，约 30 秒上线。
+改代码后 `git push origin main`，GitHub Actions 自动重跑并发布，约 30 秒上线。（**现已停用**，见文首状态说明）
 
 ## 八、管理后台
 
