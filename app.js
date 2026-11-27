@@ -526,6 +526,32 @@
       note.textContent = un > 0 ? "（有 " + un + " 人拿了码还没放回来）" : "";
     }
     applyWatermark(state.stats.wm);
+    applyRevealMode();
+  }
+
+  // 人工发码 / 自动揭晓两种模式，页面上的说法得跟着换，别让文案跟实际对不上
+  function applyRevealMode() {
+    const manual = !!(state.stats && state.stats.revealMode === "manual");
+    document.querySelectorAll("[data-m][data-a]").forEach((el) => {
+      el.textContent = manual ? el.dataset.m : el.dataset.a;
+    });
+
+    const req = $("#emptyRequest");
+    if (req) req.hidden = !manual;
+    document.querySelectorAll(".empty-tip").forEach((el) => (el.hidden = !manual));
+
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) {
+      meta.content = manual
+        ? "社区互助：小豆邀请码共享，列表只显示遮罩，申请后由站长私发码。非官方项目。"
+        : "社区互助：小豆邀请码共享，列表只显示遮罩，点一下揭走明文，拿了记得放回来。非官方项目。";
+    }
+    const og = document.querySelector('meta[property="og:description"]');
+    if (og) {
+      og.content = manual
+        ? "成员把自己的小豆邀请码放进池子，别人申请后由站长私发明文。免费、纯接力，不收钱也不卖码。"
+        : "成员把自己的小豆邀请码放进池子，别人点一下就能揭走。免费、纯接力，不收钱也不卖码。";
+    }
   }
 
   function renderEmpty(show) {
