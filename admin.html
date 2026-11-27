@@ -1195,7 +1195,7 @@
     const tip = $("#metaCityTip");
     if (tip) {
       tip.hidden = false;
-      tip.textContent = "正在自动解析 " + todo.length + " 台设备的归属地（逐个查 ipwho.is，十几秒）…";
+      tip.textContent = "正在自动解析 " + todo.length + " 台设备的归属地（逐个查，十几秒）…";
     }
     try {
       const n = await fillCities(true);
