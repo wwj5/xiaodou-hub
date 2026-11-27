@@ -566,7 +566,9 @@
   .cl-sm { max-width: 170px; }
   .adm-table td.cell-city { max-width: 216px; }
   .cl-city { display: inline-block; max-width: 196px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; vertical-align: middle; }
+    white-space: nowrap; vertical-align: middle; cursor: pointer; }
+  .cl-city:hover { color: #2f65e3; text-decoration: underline dotted; }
+  .cl-lock::after { content: "✎"; font-size: 10px; margin-left: 3px; color: #2f65e3; opacity: .7; }
   #metaTable { min-width: 700px; }
   .adm-table td.cell-time { color: #6b7688; font-size: 12.5px; }
   .adm-table td.cell-num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -835,6 +837,7 @@
 <p class="hint">
         每台设备最近一次来访记下的 IP、机型和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
         进这一页会自动把还没城市的设备送去解析（走公开的 IP 归属地接口，中国 IP 先查国内库 zxinc，再 ipwho.is、ipapi.co 兜底）并写回库里，不用再手点。
+        IP 库最多只到市，运营商出口常挂在省会，觉得不对就点城市手动改 —— 改过的带 ✎，自动解析不再覆盖。
       </p>
       <div class="adm-bar adm-bar-tight">
         <div class="adm-right">
@@ -1098,7 +1101,9 @@
     $("#metaBody").innerHTML = metaRows.map((m) => (
       "<tr>" +
         "<td>" + devTag(m.hash, m.short, m.model, "") + "</td>" +
-        '<td class="cell-city"><span class="cl-city" title="' + esc(m.city) + '">' +
+        '<td class="cell-city"><span class="cl-city' + (m.cityLocked ? " cl-lock" : "") +
+          '" data-city="' + esc(m.hash) + '" title="' +
+          esc(m.city ? m.city + "（点一下可改）" : "点一下手动填") + '">' +
           (m.city ? esc(m.city) : '<span style="color:#9aa4b6">未解析</span>') + "</span></td>" +
         '<td style="font-size:12px;color:var(--muted)">' + esc(m.ip || m.ipMasked || "—") + "</td>" +
         '<td style="font-size:12px">' + esc(m.ua || "—") + "</td>" +
@@ -1157,7 +1162,7 @@
 
   /* 只把有 IP、还没解析过城市的设备送去解析，串行 + 间隔，别把免费接口打挂 */
   async function fillCities(silent, force) {
-    const todo = metaRows.filter((m) => m.ip && (force || !m.city));
+    const todo = metaRows.filter((m) => m.ip && (force || !m.city) && (force || !m.cityLocked));
     if (!todo.length) { if (!silent) toast("没有需要解析的设备"); return 0; }
     const out = [];
     for (const m of todo.slice(0, 20)) {
@@ -1184,7 +1189,7 @@
   async function autoFillCities() {
     if (cityFilling) return;
     if (!metaRows.length) { try { await loadMeta(); } catch (e) { return; } }
-    const todo = metaRows.filter((m) => m.ip && !m.city);
+    const todo = metaRows.filter((m) => m.ip && !m.city && !m.cityLocked);
     if (!todo.length) return;
     cityFilling = true;
     const tip = $("#metaCityTip");
@@ -1203,6 +1208,24 @@
       cityFilling = false;
     }
   }
+
+  $("#metaBody").addEventListener("click", async (e) => {
+    const cell = e.target.closest("td.cell-city");
+    if (!cell) return;
+    const span = cell.querySelector("[data-city]");
+    if (!span) return;
+    const cur = span.innerText.trim();
+    const v = prompt("这台设备显示什么城市？（人工定过的，自动解析不会再覆盖）", cur === "未解析" ? "" : cur);
+    if (v === null) return;
+    const city = v.trim();
+    if (!city) return;
+    try {
+      const res = await rpc("admin_set_city", { p_key: listKey, p_hash: span.dataset.city, p_city: city });
+      if (res && res.ok === false) throw new Error(res.error || "保存失败");
+      toast("城市已改成「" + city + "」");
+      await loadMeta();
+    } catch (err) { onFail(err); }
+  });
 
   $("#metaReload").addEventListener("click", async (e) => {
     const btn = e.currentTarget;

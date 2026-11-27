@@ -129,6 +129,7 @@ create table if not exists public.visitor_meta (
   city_at      timestamptz,
   ua_short     text,
   device_model text,
+  city_locked  boolean not null default false,
   first_seen   timestamptz not null default now(),
   last_seen    timestamptz not null default now(),
   hits         integer not null default 0
@@ -137,6 +138,7 @@ create index if not exists ix_visitor_meta_seen on public.visitor_meta (last_see
 
 -- 老库补列（幂等）
 alter table public.visitor_meta add column if not exists device_model text;
+alter table public.visitor_meta add column if not exists city_locked boolean not null default false;
 
 alter table public.visitor_meta enable row level security;
 revoke all on public.visitor_meta from anon, authenticated;
@@ -1932,6 +1934,7 @@ begin
                'ip',      host(m.ip_full),
                'ipMasked', coalesce(m.ip_masked, ''),
                'city',    coalesce(m.city, ''),
+               'cityLocked', coalesce(m.city_locked, false),
                'ua',      coalesce(m.ua_short, ''),
                'model',   coalesce(m.device_model, ''),
                'firstSeen', m.first_seen,
@@ -1972,12 +1975,46 @@ begin
   update public.visitor_meta m
      set city = s.c, city_at = now()
     from src s
-   where m.visitor_hash = s.h;
+   where m.visitor_hash = s.h
+     and coalesce(m.city_locked, false) = false;
   get diagnostics v_n = row_count;
 
   return json_build_object('ok', true, 'updated', v_n);
 end;
 $$;
+
+-- 后台：手动给某台设备定城市（人工改过的，自动解析不再覆盖）
+create or replace function public.admin_set_city(p_key text, p_hash text, p_city text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_city text := left(btrim(coalesce(p_city, '')), 60);
+  v_rows integer := 0;
+begin
+  perform public.hub_require_admin(p_key);
+
+  if v_city = '' then
+    return json_build_object('ok', false, 'error', '城市不能为空');
+  end if;
+
+  update public.visitor_meta
+     set city = v_city, city_at = now(), city_locked = true
+   where visitor_hash = left(btrim(p_hash), 64);
+  get diagnostics v_rows = row_count;
+
+  if v_rows = 0 then
+    return json_build_object('ok', false, 'error', '没找到这台设备');
+  end if;
+
+  return json_build_object('ok', true, 'city', v_city);
+end;
+$$;
+
+revoke all on function public.admin_set_city(text, text, text) from public;
+grant execute on function public.admin_set_city(text, text, text) to anon, authenticated;
 
 revoke all on function public.public_debts(integer) from public;
 revoke all on function public.admin_meta(text, integer) from public;
