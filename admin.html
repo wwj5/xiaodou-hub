@@ -1108,8 +1108,24 @@
     )).join("");
   }
 
-  /* 查 IP 归属地：ipwho.is 中文优先，被限流就换 zxinc（中文），再兜 ipapi.co（英文） */
+  /* 查 IP 归属地：中国 IP 先用国内库 zxinc（ipwho.is 会把移动 IP 归错省），
+     国外 IP 走 ipwho.is 中文，最后 ipapi.co 兜底 */
   async function geoCity(ip) {
+    try {
+      const r = await fetch("https://ip.zxinc.org/api.php?type=json&ip=" + encodeURIComponent(ip), { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        const raw = String((j && j.data && (j.data.country || j.data.location)) || "").trim();
+        if (raw.indexOf("中国") === 0) {
+          const parts = raw.split(/[\u2013\u2014-]/)
+            .map((s) => s.replace(/\s+/g, ""))
+            .filter(Boolean)
+            .filter((p) => p !== "中国");
+          if (parts.length) return parts.join(" ");
+        }
+      }
+    } catch (err) { /* 换下一个源 */ }
+
     try {
       const r = await fetch("https://ipwho.is/" + encodeURIComponent(ip) + "?lang=zh-CN", { cache: "no-store" });
       if (r.ok) {
@@ -1122,18 +1138,6 @@
           const city = parts.filter(Boolean).join(" ");
           if (city) return city;
         }
-      }
-    } catch (err) { /* 换下一个源 */ }
-
-    try {
-      const r = await fetch("https://ip.zxinc.org/api.php?type=json&ip=" + encodeURIComponent(ip), { cache: "no-store" });
-      if (r.ok) {
-        const j = await r.json();
-        const raw = String((j && j.data && (j.data.country || j.data.location)) || "");
-        const parts = raw.split(/[\u2013\u2014-]/).map((s) => s.replace(/\s+/g, "")).filter(Boolean);
-        const keep = parts.filter((p) => p !== "中国");
-        if (keep.length) return keep.join(" ");
-        if (raw.trim()) return raw.trim();
       }
     } catch (err) { /* 换下一个源 */ }
 
@@ -1152,8 +1156,8 @@
   }
 
   /* 只把有 IP、还没解析过城市的设备送去解析，串行 + 间隔，别把免费接口打挂 */
-  async function fillCities(silent) {
-    const todo = metaRows.filter((m) => m.ip && !m.city);
+  async function fillCities(silent, force) {
+    const todo = metaRows.filter((m) => m.ip && (force || !m.city));
     if (!todo.length) { if (!silent) toast("没有需要解析的设备"); return 0; }
     const out = [];
     for (const m of todo.slice(0, 20)) {
@@ -1208,9 +1212,10 @@
 
   $("#metaCity").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
+    if (!confirm("把全部 " + metaRows.length + " 台设备的城市重新查一遍？大概二三十秒。")) return;
     btn.disabled = true;
     btn.textContent = "解析中…";
-    try { await fillCities(); } catch (err) { onFail(err); } finally {
+    try { await fillCities(false, true); } catch (err) { onFail(err); } finally {
       btn.disabled = false;
       btn.textContent = "补全城市";
     }
