@@ -196,7 +196,9 @@ as $$
 $$;
 
 -- 每次有设备动一下就记一笔（取 Supabase 网关透传的 x-forwarded-for）
-create or replace function public.hub_touch(p_visitor text)
+-- 旧的一参数签名先清掉，避免和新版并存造成调用歧义
+drop function if exists public.hub_touch(text);
+create or replace function public.hub_touch(p_visitor text, p_throttle_minutes integer default 0)
 returns void
 language plpgsql
 security definer
@@ -209,6 +211,15 @@ declare
   v_addr inet;
 begin
   if p_visitor is null or length(p_visitor) < 8 then
+    return;
+  end if;
+
+  -- 节流：只是刷新首页这种，别每次都写库
+  if coalesce(p_throttle_minutes, 0) > 0 and exists (
+    select 1 from public.visitor_meta m
+     where m.visitor_hash = p_visitor
+       and m.last_seen > now() - make_interval(mins => p_throttle_minutes)
+  ) then
     return;
   end if;
 
@@ -516,6 +527,8 @@ declare
   v_return integer;
   v_cards  json;
 begin
+  perform public.hub_touch(v_hash, 30);
+
   select coalesce(json_agg(t.card), '[]'::json)
     into v_cards
     from (
