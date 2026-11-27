@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=44" />
+<link rel="stylesheet" href="styles.css?v=47" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -57,7 +57,7 @@
   .adm-tag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .adm-tag.available { background: #e6f6ea; color: #1e7c3c; }
   .adm-tag.used, .adm-tag.expired { background: #f1f1f3; color: #6b7280; }
-  .adm-act { display: flex; gap: 6px; flex-wrap: wrap; }
+  .adm-act { display: flex; gap: 6px; flex-wrap: nowrap; }
   .adm-codes { max-width: 210px; }
   .adm-codes.muted { color: var(--muted); }
   .adm-code { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -93,7 +93,6 @@
   .adm-dialog .foot .primary-btn { padding: 9px 16px; }
   @media (max-width: 760px) {
     .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
   }
 
   /* ================= 新版外壳：侧边栏 + 顶栏 + 卡片式内容 ================= */
@@ -551,8 +550,53 @@
     .chat-wrap { flex-direction: column; height: auto; }
     .chat-side { width: 100%; flex: none; max-height: 220px; border-right: none; border-bottom: 1px solid #eef2f8; }
     .chat-main { height: 60vh; }
-    .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
   }
+
+  /* ---- 表格：宽屏铺满、列对齐、窄处横滚，操作按钮不竖排 ---- */
+  .tbl-scroll { width: 100%; overflow-x: auto; border-radius: 10px; }
+  .tbl-scroll::-webkit-scrollbar { height: 8px; }
+  .tbl-scroll::-webkit-scrollbar-thumb { background: #d3dae8; border-radius: 4px; }
+  .tbl-scroll { width: 100%; }
+  .adm-table th, .adm-table td { padding: 9px 10px; }
+  .adm-table td { font-size: 12.5px; }
+  .adm-table td { white-space: nowrap; }
+  .adm-table td.cell-long { white-space: normal; }
+  .cl-md, .cl-sm { display: inline-block; white-space: normal; line-height: 1.55; vertical-align: top; word-break: break-word; }
+  .cl-md { max-width: 280px; }
+  .cl-sm { max-width: 170px; }
+  .adm-table td.cell-time { color: #6b7688; font-size: 12.5px; }
+  .adm-table td.cell-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .adm-table td.cell-ops { white-space: nowrap; }
+
+  /* ---- 水印：一个框，回车即存 ---- */
+  .wm-box { border: 1px solid #e6ecf5; background: #f8fafd; border-radius: 10px; padding: 12px; }
+  .wm-box textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 58px;
+    border: 1px solid #dde4ef; background: #fff; border-radius: 8px;
+    padding: 10px 12px; font-size: 13.5px; line-height: 1.7; color: #1f2733;
+    font-family: inherit; outline: none;
+  }
+  .wm-box textarea:focus { border-color: #2f65e3; box-shadow: 0 0 0 3px rgba(47, 101, 227, .1); }
+  .wm-foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .wm-tip { color: #8a94a6; font-size: 12px; }
+  .wm-tip.ok { color: #15a06a; }
+  @media (max-width: 720px) {
+    .wm-foot { flex-wrap: wrap; }
+  }
+
+  /* 表格按容器宽度铺，短列不换行、长列换行；再窄就横滚 */
+  .tbl-scroll .adm-table { width: 100%; min-width: 0; table-layout: auto; }
+  .adm-table td.cell-ops { white-space: nowrap; }
+  .adm-table td.cell-ops .adm-act { display: flex; flex-wrap: nowrap; gap: 6px; }
+
+  /* ---- 仪表盘图表 ---- */
+  .pg-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .pg-charts .pg-card { margin: 0; }
+  @media (max-width: 1080px) { .pg-charts { grid-template-columns: 1fr; } }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #6b7688; margin: 2px 0 6px; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .chart-box { width: 100%; }
+  .chart-box canvas { width: 100%; display: block; }
 </style>
 </head>
 <body>
@@ -612,7 +656,35 @@
       <div class="adm-stat"><span>今日被拒</span><b id="sRejects">–</b></div>
     </div>
         </div>
+            <div class="pg-charts">
+        <div class="pg-card">
+          <div class="pg-head"><h2>近 7 天走势</h2><span class="pg-sub">揭晓 / 发布 / 申请</span></div>
+          <div class="legend">
+            <span><i style="background:#2f65e3"></i>揭晓</span>
+            <span><i style="background:#15a06a"></i>发布</span>
+            <span><i style="background:#f0a020"></i>申请</span>
+          </div>
+          <div class="chart-box"><canvas id="chartLine" data-h="190"></canvas></div>
+        </div>
+        <div class="pg-card">
+          <div class="pg-head"><h2>每天来的设备</h2><span class="pg-sub">按第一次访问算</span></div>
+          <div class="legend"><span><i style="background:#5b8def"></i>新设备</span></div>
+          <div class="chart-box"><canvas id="chartBar" data-h="190"></canvas></div>
+        </div>
+      </div>
+
+      <div class="pg-card">
+          <div class="pg-head"><h2>库里的表</h2><span class="pg-sub">一共 11 张，按记录数排</span></div>
+          <div class="tbl-scroll fit">
+            <table class="adm-table" id="tblTable">
+              <thead><tr><th>表</th><th>中文名</th><th>记录数</th><th>这张表干什么的</th></tr></thead>
+              <tbody id="tblBody"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
+
+      
 
       <section class="pg" data-pg="codes">
         <div class="pg-card">
@@ -628,7 +700,8 @@
       </div>
     </div>
 
-    <table class="adm-table" id="codeTable">
+    <div class="tbl-scroll">
+      <table class="adm-table" id="codeTable">
       <thead>
         <tr>
           <th>邀请码</th><th>状态</th><th>剩余 / 总</th><th>顺位</th><th>已揭</th><th>发布时间</th><th>操作</th>
@@ -636,6 +709,7 @@
       </thead>
       <tbody id="codeBody"></tbody>
     </table>
+      </div>
     <div class="adm-empty" id="codeEmpty" hidden>这个筛选下没有码。</div>
         </div>
       </section>
@@ -658,12 +732,14 @@
           <button class="adm-mini" id="reqReload" type="button">刷新申请</button>
         </div>
       </div>
+      <div class="tbl-scroll">
       <table class="adm-table" id="reqTable">
         <thead>
-          <tr><th>#</th><th>时间</th><th>设备</th><th>揭 / 回 / 欠</th><th>联系方式</th><th>留言</th><th>操作</th></tr>
+          <tr><th>时间</th><th>设备</th><th>揭 / 回 / 欠</th><th>联系方式</th><th>留言</th><th>操作</th></tr>
         </thead>
         <tbody id="reqBody"></tbody>
       </table>
+      </div>
       <div class="adm-empty" id="reqEmpty" hidden>现在没人申请，池子安静着。</div>
         </div>
       </section>
@@ -718,6 +794,7 @@
           <button class="adm-mini" id="ledgerExport" type="button">导出 CSV</button>
         </div>
       </div>
+      <div class="tbl-scroll">
       <table class="adm-table" id="ledgerTable">
         <thead>
           <tr>
@@ -726,6 +803,7 @@
         </thead>
         <tbody id="ledgerBody"></tbody>
       </table>
+      </div>
       <div class="adm-empty" id="ledgerEmpty" hidden>还没有人揭晓过，账本是空的。</div>
         </div>
       </section>
@@ -734,7 +812,12 @@
         <div class="pg-card">
           <div class="pg-head"><h2>待处理举报 <span id="reportCount" style="color:var(--muted);font-weight:400"></span></h2></div>
 <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
-      <div id="reportList"></div>
+      <div class="tbl-scroll">
+        <table class="adm-table" id="reportTable">
+          <thead><tr><th>原因</th><th>邀请码</th><th>备注</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody id="reportList"></tbody>
+        </table>
+      </div>
       <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
         </div>
       </section>
@@ -752,12 +835,14 @@
           <button class="adm-mini" id="metaCity" type="button">补全城市</button>
         </div>
       </div>
+      <div class="tbl-scroll">
       <table class="adm-table" id="metaTable">
         <thead>
           <tr><th>设备</th><th>城市</th><th>IP</th><th>浏览器</th><th>来访</th><th>最后活跃</th></tr>
         </thead>
         <tbody id="metaBody"></tbody>
       </table>
+      </div>
       <div class="adm-empty" id="metaEmpty" hidden>还没有设备档案，等有人来过才有。</div>
         </div>
       </section>
@@ -776,12 +861,14 @@
           <button class="adm-mini danger" id="rejClear" type="button">清空日志</button>
         </div>
       </div>
+      <div class="tbl-scroll">
       <table class="adm-table" id="rejTable">
         <thead>
           <tr><th>提交的码</th><th>为什么不收</th><th>设备</th><th>时间</th></tr>
         </thead>
         <tbody id="rejBody"></tbody>
       </table>
+      </div>
       <div class="adm-empty" id="rejEmpty" hidden>还没有被拒的记录。</div>
         </div>
       </section>
@@ -790,22 +877,23 @@
         <div class="pg-card">
           <div class="pg-head"><h2>页面水印</h2></div>
 <p class="hint">
-        首页那层斜向水印的文字和深浅，在这儿改完保存，访客刷新页面就变，不用重新部署。
-        两行都别太长（40 字以内），透明度 0–0.35：越大越显眼，太大会挡字。
+        首页那层斜向水印的文字和深浅，改完就生效，访客刷新页面就变，不用重新部署。
+        框里最多写两行（每行 40 字内），<b>按回车直接保存</b>；要换行用 Shift + 回车。
       </p>
-      <div class="adm-bar adm-bar-tight">
-        <label class="adm-check adm-wm">第一行
-          <input id="wmLine1" type="text" maxlength="40" placeholder="自觉回填邀请码" />
-        </label>
-        <label class="adm-check adm-wm">第二行
-          <input id="wmLine2" type="text" maxlength="40" placeholder="拿码不回 · 限制设备" />
-        </label>
-        <label class="adm-check adm-wm">透明度
-          <input id="wmOpacity" type="number" min="0" max="0.35" step="0.01" />
-        </label>
-        <div class="adm-right">
-          <button class="adm-mini" id="wmReset" type="button">恢复默认</button>
-          <button class="adm-mini" id="wmSave" type="button">保存水印</button>
+      <div class="wm-box">
+        <textarea id="wmText" rows="2" maxlength="83" spellcheck="false"
+          placeholder="自觉回填邀请码 有点素质&#10;拿码不回 · 限制设备使用本站"></textarea>
+        <input id="wmLine1" type="hidden" />
+        <input id="wmLine2" type="hidden" />
+        <div class="wm-foot">
+          <label class="adm-check adm-wm">透明度
+            <input id="wmOpacity" type="number" min="0" max="0.35" step="0.01" />
+          </label>
+          <span class="wm-tip" id="wmTip">回车保存</span>
+          <div class="adm-right">
+            <button class="adm-mini" id="wmReset" type="button">恢复默认</button>
+            <button class="adm-mini" id="wmSave" type="button">保存水印</button>
+          </div>
         </div>
       </div>
         </div>
@@ -814,7 +902,7 @@
   </div>
 </div>
 
-<div class="adm-mask" id="confirmMask"<div class="adm-mask" id="confirmMask" hidden>
+<div class="adm-mask" id="confirmMask" hidden>
   <div class="adm-dialog" role="dialog" aria-modal="true">
     <h3 id="confirmTitle">确认</h3>
     <p id="confirmDesc"></p>
@@ -936,8 +1024,8 @@
         "<td>" + c.remainingSpots + " / " + c.totalSpots + "</td>" +
         "<td>" + c.queueRank + "</td>" +
         "<td>" + c.claimedCount + "</td>" +
-        "<td>" + fmtTime(c.createdAt) + "</td>" +
-        '<td><div class="adm-act">' +
+        '<td class="cell-time">' + fmtTime(c.createdAt) + "</td>" +
+        '<td class="cell-ops"><div class="adm-act">' +
           (c.status === "available"
             ? '<button class="adm-mini" data-act="down" data-id="' + c.id + '">下架</button>'
             : '<button class="adm-mini" data-act="up" data-id="' + c.id + '">恢复</button>') +
@@ -958,17 +1046,16 @@
     $("#reqCount").textContent = reqRows.length ? "（" + reqRows.length + " 条待发码，" + (data.available || 0) + " 个码可用）" : "";
     $("#reqEmpty").hidden = reqRows.length > 0;
     $("#reqTable").hidden = reqRows.length === 0;
-    $("#reqBody").innerHTML = reqRows.map((r, i) => (
+    $("#reqBody").innerHTML = reqRows.map((r) => (
       "<tr>" +
-        "<td>" + (i + 1) + "</td>" +
-        "<td>" + fmtTime(r.createdAt) + "</td>" +
+        '<td class="cell-time">' + fmtTime(r.createdAt) + "</td>" +
         '<td><code title="' + esc(r.short) + '">' + esc(r.short) + "…</code>" +
           (r.blocked ? ' <span class="adm-tag expired">受限</span>' : "") + "</td>" +
         "<td>" + r.taken + " / " + r.returned + " / " +
           (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
-        "<td>" + esc(r.contact) + "</td>" +
-        '<td style="color:var(--muted);font-size:12px">' + (r.note ? esc(r.note) : "—") + "</td>" +
-        '<td><div class="adm-act">' +
+        '<td><span class="cl-sm" title="' + esc(r.contact) + '">' + esc(r.contact) + "</span></td>" +
+        '<td class="cell-long"><span class="cl-md" title="' + esc(r.note) + '">' + (r.note ? esc(r.note) : "—") + "</span></td>" +
+        '<td class="cell-ops"><div class="adm-act">' +
           '<button class="adm-mini" data-req="send" data-id="' + r.id + '">发码</button>' +
           '<button class="adm-mini danger" data-req="reject" data-id="' + r.id + '">拒绝</button>' +
         "</div></td></tr>"
@@ -996,11 +1083,11 @@
     $("#metaBody").innerHTML = metaRows.map((m) => (
       "<tr>" +
         '<td><code title="' + esc(m.hash) + '">' + esc(m.short) + "…</code></td>" +
-        "<td>" + (m.city ? esc(m.city) : '<span style="color:var(--muted-2)">未解析</span>') + "</td>" +
+        '<td class="cell-long"><span class="cl-sm" title="' + esc(m.city) + '">' + (m.city ? esc(m.city) : '<span style="color:#9aa4b6">未解析</span>') + "</span></td>" +
         '<td style="font-size:12px;color:var(--muted)">' + esc(m.ip || m.ipMasked || "—") + "</td>" +
         '<td style="font-size:12px">' + esc(m.ua || "—") + "</td>" +
         "<td>" + m.hits + " 次</td>" +
-        '<td style="font-size:12px;color:var(--muted)">' + metaTime(m.lastSeen) + "</td>" +
+        '<td class="cell-time">' + metaTime(m.lastSeen) + "</td>" +
       "</tr>"
     )).join("");
   }
@@ -1109,19 +1196,184 @@
 
   function renderReports(reports) {
     $("#reportEmpty").hidden = reports.length > 0;
+    $("#reportTable").hidden = reports.length === 0;
     $("#reportList").innerHTML = reports.map((r) => (
-      '<div class="adm-report">' +
-        '<div class="row">' +
-          '<span class="reason">' + esc(REASON[r.reason] || r.reason) + "</span>" +
-          (r.code ? "<code>" + esc(r.code) + "</code>" : "<span style='color:var(--muted)'>（未关联邀请码）</span>") +
-          "<span style='color:var(--muted);font-size:12px'>" + fmtTime(r.createdAt) + "</span>" +
-        "</div>" +
-        (r.note ? '<div class="note">' + esc(r.note) + "</div>" : "") +
-        '<div class="adm-act" style="margin-top:8px">' +
+      "<tr>" +
+        '<td><span class="adm-tag expired">' + esc(REASON[r.reason] || r.reason) + "</span></td>" +
+        "<td>" + (r.code ? "<code>" + esc(r.code) + "</code>" : '<span style="color:#9aa4b6">未关联</span>') + "</td>" +
+        '<td class="cell-long"><span class="cl-md" title="' + esc(r.note) + '">' + (r.note ? esc(r.note) : "—") + "</span></td>" +
+        '<td class="cell-time">' + fmtTime(r.createdAt) + "</td>" +
+        '<td class="cell-ops"><div class="adm-act">' +
           '<button class="adm-mini" data-rep="done" data-id="' + r.id + '">标记已处理</button>' +
           (r.codeId ? '<button class="adm-mini danger" data-rep="down" data-code="' + r.codeId + '" data-id="' + r.id + '">下架该码并处理</button>' : "") +
-        "</div>" +
-      "</div>"
+        "</div></td>" +
+      "</tr>"
+    )).join("");
+  }
+
+  let chartData = null;
+
+  function setupCanvas(cv) {
+    if (!cv) return null;
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || 520;
+    const h = Number(cv.dataset.h || 190);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    cv.style.height = h + "px";
+    const g = cv.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    return { g: g, w: w, h: h };
+  }
+
+  function niceMax(v) {
+    if (v <= 4) return 4;
+    const step = v <= 20 ? 5 : v <= 60 ? 10 : 20;
+    return Math.ceil(v / step) * step;
+  }
+
+  function drawLineChart() {
+    if (!chartData) return;
+    const box = setupCanvas($("#chartLine"));
+    if (!box) return;
+    const g = box.g, w = box.w, h = box.h;
+    const padL = 32, padR = 10, padT = 12, padB = 24;
+    const iw = w - padL - padR, ih = h - padT - padB;
+    const days = chartData.days || [];
+    const series = [
+      { key: "reveal", color: "#2f65e3" },
+      { key: "publish", color: "#15a06a" },
+      { key: "request", color: "#f0a020" },
+    ];
+    let max = 0;
+    series.forEach((s) => (chartData[s.key] || []).forEach((v) => (max = Math.max(max, Number(v) || 0))));
+    max = niceMax(max);
+
+    g.font = "11px -apple-system, 'Segoe UI', sans-serif";
+    g.strokeStyle = "#eef2f8";
+    g.fillStyle = "#98a2b3";
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (ih * i) / 4;
+      g.beginPath(); g.moveTo(padL, y); g.lineTo(padL + iw, y); g.stroke();
+      const val = Math.round(max - (max * i) / 4);
+      g.fillText(String(val), 6, y + 3.5);
+    }
+
+    const n = days.length || 1;
+    const xAt = (i) => (n === 1 ? padL + iw / 2 : padL + (iw * i) / (n - 1));
+    const yAt = (v) => padT + ih - (ih * (Number(v) || 0)) / max;
+
+    series.forEach((s) => {
+      const arr = chartData[s.key] || [];
+      if (!arr.length) return;
+      g.strokeStyle = s.color;
+      g.lineWidth = 2;
+      g.lineJoin = "round";
+      g.beginPath();
+      arr.forEach((v, i) => (i ? g.lineTo(xAt(i), yAt(v)) : g.moveTo(xAt(i), yAt(v))));
+      g.stroke();
+      g.fillStyle = s.color;
+      arr.forEach((v, i) => {
+        g.beginPath();
+        g.arc(xAt(i), yAt(v), 2.6, 0, Math.PI * 2);
+        g.fill();
+      });
+    });
+
+    g.fillStyle = "#98a2b3";
+    days.forEach((d, i) => {
+      const x = xAt(i);
+      if (n > 7 && i % 2) return;
+      g.fillText(d, Math.max(padL - 8, Math.min(x - 15, w - padR - 32)), h - 6);
+    });
+  }
+
+  function drawBarChart() {
+    if (!chartData) return;
+    const box = setupCanvas($("#chartBar"));
+    if (!box) return;
+    const g = box.g, w = box.w, h = box.h;
+    const padL = 32, padR = 10, padT = 12, padB = 24;
+    const iw = w - padL - padR, ih = h - padT - padB;
+    const days = chartData.days || [];
+    const vals = chartData.visitor || [];
+    let max = 0;
+    vals.forEach((v) => (max = Math.max(max, Number(v) || 0)));
+    max = niceMax(max);
+
+    g.font = "11px -apple-system, 'Segoe UI', sans-serif";
+    g.strokeStyle = "#eef2f8";
+    g.fillStyle = "#98a2b3";
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (ih * i) / 4;
+      g.beginPath(); g.moveTo(padL, y); g.lineTo(padL + iw, y); g.stroke();
+      g.fillText(String(Math.round(max - (max * i) / 4)), 6, y + 3.5);
+    }
+
+    const n = Math.max(vals.length, 1);
+    const slot = iw / n;
+    const bw = Math.min(28, slot * 0.52);
+    vals.forEach((v, i) => {
+      const val = Number(v) || 0;
+      const bh = (ih * val) / max;
+      const x = padL + slot * i + (slot - bw) / 2;
+      const y = padT + ih - bh;
+      const grad = g.createLinearGradient(0, y, 0, padT + ih);
+      grad.addColorStop(0, "#5b8def");
+      grad.addColorStop(1, "#a9c3f5");
+      g.fillStyle = val > 0 ? grad : "#eef2f8";
+      const r = Math.min(4, bw / 2);
+      g.beginPath();
+      g.moveTo(x, padT + ih);
+      g.lineTo(x, y + r);
+      g.quadraticCurveTo(x, y, x + r, y);
+      g.lineTo(x + bw - r, y);
+      g.quadraticCurveTo(x + bw, y, x + bw, y + r);
+      g.lineTo(x + bw, padT + ih);
+      g.closePath();
+      g.fill();
+
+      if (val > 0) {
+        g.fillStyle = "#33415c";
+        const label = String(val);
+        g.fillText(label, x + bw / 2 - g.measureText(label).width / 2, y - 4);
+      }
+    });
+
+    g.fillStyle = "#98a2b3";
+    days.forEach((d, i) => {
+      const x = padL + slot * i + slot / 2;
+      g.fillText(d, Math.max(padL, Math.min(x - 15, w - padR - 32)), h - 6);
+    });
+  }
+
+  function drawCharts() {
+    try { drawLineChart(); drawBarChart(); } catch (e) { /* 画不出来不影响数据 */ }
+  }
+
+  async function loadCharts() {
+    chartData = await rpc("admin_charts", { p_key: listKey, p_days: 7 });
+    drawCharts();
+  }
+
+  window.addEventListener("resize", () => {
+    if (!$("#panel") || $("#panel").hidden) return;
+    drawCharts();
+  });
+
+  async function loadTables() {
+    const rows = await rpc("admin_tables", { p_key: listKey });
+    const list = Array.isArray(rows) ? rows : [];
+    const body = $("#tblBody");
+    if (!body) return;
+    body.innerHTML = list.map((x) => (
+      "<tr>" +
+        "<td><code>" + esc(x.name) + "</code></td>" +
+        "<td>" + esc(x.label) + "</td>" +
+        '<td class="cell-num"><b>' + x.rows + "</b></td>" +
+        '<td class="cell-long"><span class="cl-md" style="color:#6b7688" title="' + esc(x.note) + '">' + esc(x.note) + "</span></td>" +
+      "</tr>"
     )).join("");
   }
 
@@ -1135,6 +1387,8 @@
     await loadRejects();
     await loadRequests();
     await loadMeta();
+    loadTables().catch(() => {});
+    loadCharts().catch(() => {});
     return data;
   }
 
@@ -1152,11 +1406,30 @@
         $("#wmLine1").value = s.wm.line1 || "";
         $("#wmLine2").value = s.wm.line2 || "";
         $("#wmOpacity").value = s.wm.opacity != null ? s.wm.opacity : 0.11;
+        fillWmText();
       }
     } catch (err) { onFail(err); }
   }
 
   /* ---------------- 页面水印 ---------------- */
+
+  function fillWmText() {
+    const el = $("#wmText");
+    if (!el) return;
+    const a = ($("#wmLine1").value || "").trim();
+    const b = ($("#wmLine2").value || "").trim();
+    el.value = b ? a + "\n" + b : a;
+  }
+
+  function readWmText() {
+    const el = $("#wmText");
+    const lines = (el ? el.value : "").split(/\r?\n/).map((s) => s.trim());
+    const l1 = (lines[0] || "").slice(0, 40);
+    const l2 = (lines[1] || "").slice(0, 40);
+    $("#wmLine1").value = l1;
+    $("#wmLine2").value = l2;
+    return { l1: l1, l2: l2 };
+  }
 
   async function saveWatermark(line1, line2, opacity, note) {
     const btn = $("#wmSave");
@@ -1171,6 +1444,7 @@
       $("#wmLine1").value = res.wm.line1;
       $("#wmLine2").value = res.wm.line2;
       $("#wmOpacity").value = res.wm.opacity;
+      fillWmText();
       toast(note || "水印已保存，刷新首页就能看到");
     } catch (err) {
       toast(err.message || "保存失败");
@@ -1180,13 +1454,33 @@
   }
 
   $("#wmSave").addEventListener("click", () => {
-    const l1 = $("#wmLine1").value.trim();
-    const l2 = $("#wmLine2").value.trim();
+    const wm = readWmText();
     const op = Number($("#wmOpacity").value);
-    if (!l1 && !l2) { toast("两行至少留一行字"); return; }
+    if (!wm.l1 && !wm.l2) { toast("至少留一行字"); return; }
     if (!isFinite(op) || op < 0 || op > 0.35) { toast("透明度要在 0–0.35 之间"); return; }
-    saveWatermark(l1, l2, op);
+    saveWatermark(wm.l1, wm.l2, op);
   });
+
+  (function bindWmText() {
+    const el = $("#wmText");
+    if (!el) return;
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        $("#wmSave").click();
+        e.currentTarget.blur();
+      }
+    });
+    el.addEventListener("input", () => {
+      const lines = el.value.split(/\r?\n/);
+      if (lines.length > 2) el.value = lines.slice(0, 2).join("\n");
+      readWmText();
+    });
+    el.addEventListener("blur", () => {
+      const tip = $("#wmTip");
+      if (tip) { tip.textContent = "回车保存"; tip.classList.remove("ok"); }
+    });
+  })();
 
   $("#wmReset").addEventListener("click", () => {
     askConfirm(
@@ -1257,10 +1551,10 @@
         codeCell(r.gotCodes, "got") +
         codeCell(r.gaveCodes, "gave") +
         "<td>" + r.taken + " / " + r.returned + "</td>" +
-        '<td>' + (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
-        "<td>" + (r.lastAt ? fmtTime(r.lastAt) : "—") + "</td>" +
-        "<td>" + ledgerState(r) + "</td>" +
-        '<td><div class="adm-act">' + act + "</div></td></tr>";
+        '<td class="cell-num">' + (r.pending > 0 ? "<b>" + r.pending + "</b>" : "0") + "</td>" +
+        '<td class="cell-time">' + (r.lastAt ? fmtTime(r.lastAt) : "—") + "</td>" +
+        '<td class="cell-ops">' + ledgerState(r) + "</td>" +
+        '<td class="cell-ops"><div class="adm-act">' + act + "</div></td></tr>";
     }).join("");
   }
 
@@ -1359,9 +1653,9 @@
     $("#rejBody").innerHTML = rows.map((r) =>
       "<tr>" +
         "<td><code>" + esc(r.code) + "</code></td>" +
-        "<td style='font-size:12.5px'>" + esc(r.reason) + "</td>" +
+        '<td class="cell-long"><span class="cl-md" title="' + esc(r.reason) + '">' + esc(r.reason) + "</span></td>" +
         '<td><code style="color:var(--muted)">' + esc(r.who || "—") + "</code></td>" +
-        "<td>" + fmtTime(r.at) + "</td>" +
+        '<td class="cell-time">' + fmtTime(r.at) + "</td>" +
       "</tr>"
     ).join("");
   }
@@ -1620,7 +1914,8 @@
     const el = $("#pgTitle");
     if (el) el.textContent = PG_TITLE[name] || "";
     $("#admSide").classList.remove("open");
-    if (name === "chat") loadChatThreads().catch((e) => console.error("CHATLOAD", e));;
+    if (name === "chat") loadChatThreads().catch((e) => console.error("CHATLOAD", e));
+    if (name === "dash") setTimeout(drawCharts, 40);;
     if (history.replaceState) history.replaceState(null, "", "#" + name);
   }
 

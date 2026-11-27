@@ -2181,3 +2181,88 @@ grant execute on function public.admin_chat_list(text, integer) to anon, authent
 grant execute on function public.admin_chat_fetch(text, bigint) to anon, authenticated;
 grant execute on function public.admin_chat_reply(text, bigint, text) to anon, authenticated;
 grant execute on function public.admin_chat_close(text, bigint, boolean) to anon, authenticated;
+
+-- ============================================================
+-- 后台：库里各表的记录数（仪表盘「库里的表」）
+-- ============================================================
+create or replace function public.admin_tables(p_key text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    with t(tbl, label, note, cnt) as (
+      select 'invite_codes', '邀请码', '池子里的码：明文、状态、剩余次数、队列顺位', count(*) from public.invite_codes
+      union all select 'reports', '揭晓记录', '谁在什么时候揭走了哪个码，每日配额也算在这', count(*) from public.reports
+      union all select 'publish_log', '发布流水', '全站发布限流用，按小时记', count(*) from public.publish_log
+      union all select 'feedback', '反馈', '访客点的「无效 / 已被用 / 信息不对 / 其他」', count(*) from public.feedback
+      union all select 'reveal_requests', '发码申请', '人工发码的排队队列，open 的就是待发', count(*) from public.reveal_requests
+      union all select 'visitor_meta', '设备档案', '访问 IP、城市、浏览器（完整 IP 只在后台）', count(*) from public.visitor_meta
+      union all select 'visitor_blocks', '受限设备', '欠码不还、或手动拉黑的设备', count(*) from public.visitor_blocks
+      union all select 'reject_log', '被拒收录', '格式没过的提交，只留 7 天', count(*) from public.reject_log
+      union all select 'chat_threads', '客服会话', '一台设备一条会话', count(*) from public.chat_threads
+      union all select 'chat_messages', '客服消息', '会话里的每一条消息', count(*) from public.chat_messages
+      union all select 'app_settings', '设置', '管理密码、出码方式、水印，只有一行', count(*) from public.app_settings
+    )
+    select json_agg(json_build_object('name', tbl, 'label', label, 'note', note, 'rows', cnt)
+                    order by cnt desc, tbl)
+      from t
+  );
+end;
+$$;
+
+-- ============================================================
+-- 后台：仪表盘图表用的按天统计（北京时间）
+-- ============================================================
+create or replace function public.admin_charts(p_key text, p_days integer default 7)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_days integer := least(greatest(coalesce(p_days, 7), 3), 30);
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    with d as (
+      select generate_series(public.hub_today() - (v_days - 1), public.hub_today(), interval '1 day')::date as day
+    )
+    select json_build_object(
+      'days', (select json_agg(to_char(day, 'MM-DD') order by day) from d),
+      'publish', (select json_agg(coalesce((
+                    select count(*) from public.publish_log p
+                     where ((p.created_at at time zone 'UTC') + interval '8 hours')::date = d.day), 0) order by d.day) from d),
+      'reveal', (select json_agg(coalesce((
+                    select count(*) from public.reports r
+                     where r.action = 'reveal'
+                       and ((r.created_at at time zone 'UTC') + interval '8 hours')::date = d.day), 0) order by d.day) from d),
+      'request', (select json_agg(coalesce((
+                    select count(*) from public.reveal_requests q
+                     where ((q.created_at at time zone 'UTC') + interval '8 hours')::date = d.day), 0) order by d.day) from d),
+      'visitor', (select json_agg(coalesce((
+                    select count(*) from public.visitor_meta v
+                     where ((v.first_seen at time zone 'UTC') + interval '8 hours')::date = d.day), 0) order by d.day) from d),
+      'codes', json_build_object(
+        'available', (select count(*) from public.invite_codes where status = 'available'),
+        'used', (select count(*) from public.invite_codes where status = 'used'),
+        'expired', (select count(*) from public.invite_codes where status = 'expired')
+      ),
+      'chat', json_build_object(
+        'threads', (select count(*) from public.chat_threads),
+        'unread', (select coalesce(sum(unread_admin), 0) from public.chat_threads)
+      )
+    )
+  );
+end;
+$$;
+
+revoke all on function public.admin_tables(text) from public;
+revoke all on function public.admin_charts(text, integer) from public;
+grant execute on function public.admin_tables(text) to anon, authenticated;
+grant execute on function public.admin_charts(text, integer) to anon, authenticated;
