@@ -440,6 +440,9 @@
         ? rpc("submit_feedback", { p_id: id, p_reason: reason, p_note: note, p_token: visitorToken() })
         : demo.feedback(id, reason, note, visitorToken());
     },
+    debts() {
+      return MODE === "remote" ? rpc("public_debts", { p_limit: 40 }) : Promise.resolve([]);
+    },
   };
 
   /* ---------------------------------------------------------- 状态 */
@@ -451,6 +454,7 @@
     quota: { remaining: CFG.dailyReveals, limit: CFG.dailyReveals, resetAt: "北京时间 00:00" },
     relay: null,
     request: null,
+    debts: [],
     busy: false,
     feedbackTarget: null,
   };
@@ -610,11 +614,43 @@
     $("#historyNote").textContent = "共 " + state.used.length + " 条 · 都是已经被揭走的码，大多已经被别人注册用掉了";
   }
 
+  function renderDebts() {
+    const wrap = $("#debts");
+    const list = $("#debtsList");
+    if (!wrap || !list) return;
+    const rows = state.debts || [];
+    if (!rows.length) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    $("#debtsNote").textContent = rows.length + " 台设备还欠着";
+    list.innerHTML = rows.map((d) => {
+      const where = [d.city, d.ipMasked].filter(Boolean).join(" · ") || "地址未知";
+      const dev = d.ua || "设备未知";
+      const last = d.lastCode ? "最近揭走 " + esc(d.lastCode) : "最近有过动作";
+      return (
+        '<li class="debt-row">' +
+          '<div class="debt-main">' +
+            '<span class="debt-where">' + esc(where) + "</span>" +
+            '<span class="debt-dev">' + esc(dev) + "</span>" +
+            (d.blocked ? '<span class="debt-lock">已限制</span>' : "") +
+          "</div>" +
+          '<div class="debt-side">' +
+            '<span class="debt-num">欠 ' + Number(d.pending || 0) + " 个</span>" +
+            "<span class=\"debt-time\">" + esc(timeAgo(d.lastAt)) + " · " + esc(last) + "</span>" +
+          "</div>" +
+        "</li>"
+      );
+    }).join("");
+  }
+
   function renderAll() {
     renderStats();
     renderRelay();
     renderGrid();
     renderHistory();
+    renderDebts();
   }
 
   /* ---------------------------------------------------------- 加载 */
@@ -624,9 +660,14 @@
     if (loading) return;
     loading = true;
     try {
-      const [availRes, usedRes] = await Promise.all([api.list("available"), api.list("used")]);
+      const [availRes, usedRes, debtRes] = await Promise.all([
+        api.list("available"),
+        api.list("used"),
+        api.debts().catch(() => []),
+      ]);
       state.avail = availRes.cards || [];
       state.used = usedRes.cards || [];
+      state.debts = Array.isArray(debtRes) ? debtRes : [];
       state.stats = availRes.stats || state.stats;
       if (availRes.quota) state.quota = availRes.quota;
       if (availRes.relay) state.relay = availRes.relay;

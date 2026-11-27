@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，申请后由站长私发码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=39" />
+<link rel="stylesheet" href="styles.css?v=40" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -129,6 +129,23 @@
       </div>
       <div class="history-list" id="historyList"></div>
     </div>
+  </section>
+
+  <section class="debts" id="debts" hidden>
+    <details>
+      <summary>
+        <span class="debts-title">欠码公示</span>
+        <span class="debts-note" id="debtsNote"></span>
+      </summary>
+      <p class="debts-intro">
+        拿到码没放回的设备，按最后一次来访记的 IP 归属地列出来。地址只到城市、IP 只留前两段，
+        放回一个码就从这张表上消失。
+      </p>
+      <ul class="debts-list" id="debtsList"></ul>
+      <p class="debts-foot">
+        IP 会漂、也会被好几个人共用，所以这张表只能看个大概，别拿着它去认人。
+      </p>
+    </details>
   </section>
 
   <section class="rules" id="rules">
@@ -319,7 +336,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
 

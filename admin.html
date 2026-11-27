@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=25" />
+<link rel="stylesheet" href="styles.css?v=40" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -171,6 +171,27 @@
         <tbody id="reqBody"></tbody>
       </table>
       <div class="adm-empty" id="reqEmpty" hidden>现在没人申请，池子安静着。</div>
+    </div>
+
+    <div class="adm-sec">
+      <h2>设备档案 <span id="metaCount" style="color:var(--muted);font-weight:400"></span></h2>
+      <p class="hint">
+        每台设备最近一次来访记下的 IP 和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
+        点「补全城市」会把带 IP 的设备送去解析归属地（走 ipwho.is，免费公开接口），解析完写回库里。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <div class="adm-right">
+          <button class="adm-mini" id="metaReload" type="button">刷新档案</button>
+          <button class="adm-mini" id="metaCity" type="button">补全城市</button>
+        </div>
+      </div>
+      <table class="adm-table" id="metaTable">
+        <thead>
+          <tr><th>设备</th><th>城市</th><th>IP</th><th>浏览器</th><th>来访</th><th>最后活跃</th></tr>
+        </thead>
+        <tbody id="metaBody"></tbody>
+      </table>
+      <div class="adm-empty" id="metaEmpty" hidden>还没有设备档案，等有人来过才有。</div>
     </div>
 
     <div class="adm-sec">
@@ -419,6 +440,75 @@
     )).join("");
   }
 
+  /* ---------------- 设备档案 + 城市补全 ---------------- */
+  let metaRows = [];
+
+  function metaTime(s) {
+    if (!s) return "—";
+    const d = new Date(s);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 3600) return Math.max(1, Math.round(diff / 60)) + " 分钟前";
+    if (diff < 86400) return Math.round(diff / 3600) + " 小时前";
+    return Math.round(diff / 86400) + " 天前";
+  }
+
+  async function loadMeta() {
+    const rows = await rpc("admin_meta", { p_key: listKey, p_limit: 300 });
+    metaRows = Array.isArray(rows) ? rows : [];
+    $("#metaCount").textContent = metaRows.length ? "（" + metaRows.length + " 台设备）" : "";
+    $("#metaEmpty").hidden = metaRows.length > 0;
+    $("#metaTable").hidden = metaRows.length === 0;
+    $("#metaBody").innerHTML = metaRows.map((m) => (
+      "<tr>" +
+        '<td><code title="' + esc(m.hash) + '">' + esc(m.short) + "…</code></td>" +
+        "<td>" + (m.city ? esc(m.city) : '<span style="color:var(--muted-2)">未解析</span>') + "</td>" +
+        '<td style="font-size:12px;color:var(--muted)">' + esc(m.ip || m.ipMasked || "—") + "</td>" +
+        '<td style="font-size:12px">' + esc(m.ua || "—") + "</td>" +
+        "<td>" + m.hits + " 次</td>" +
+        '<td style="font-size:12px;color:var(--muted)">' + metaTime(m.lastSeen) + "</td>" +
+      "</tr>"
+    )).join("");
+  }
+
+  /* 只把有 IP、还没解析过城市的设备送去 ipwho.is，串行 + 间隔，别把免费接口打挂 */
+  async function fillCities() {
+    const todo = metaRows.filter((m) => m.ip && !m.city);
+    if (!todo.length) { toast("没有需要解析的设备"); return; }
+    const out = [];
+    for (const m of todo) {
+      try {
+        const r = await fetch("https://ipwho.is/" + encodeURIComponent(m.ip), { cache: "no-store" });
+        const j = await r.json();
+        if (j && j.success) {
+          const city = [j.region, j.city].filter(Boolean).join(" ");
+          if (city) out.push({ hash: m.hash, city: city.slice(0, 60) });
+        }
+      } catch (err) { /* 单条失败不影响其它 */ }
+      await new Promise((r) => setTimeout(r, 180));
+    }
+    if (!out.length) { toast("一个都没解析出来，稍再试（免费接口有频率限制）"); return; }
+    const res = await rpc("admin_set_cities", { p_key: listKey, p_map: out });
+    if (res && res.ok === false) throw new Error(res.error || "写回失败");
+    toast("已补全 " + (res.updated || out.length) + " 台设备的城市");
+    await loadMeta();
+  }
+
+  $("#metaReload").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await loadMeta(); toast("档案已刷新"); } catch (err) { onFail(err); } finally { btn.disabled = false; }
+  });
+
+  $("#metaCity").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "解析中…";
+    try { await fillCities(); } catch (err) { onFail(err); } finally {
+      btn.disabled = false;
+      btn.textContent = "补全城市";
+    }
+  });
+
   $("#reqReload").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
@@ -505,6 +595,7 @@
     await loadLedger();
     await loadRejects();
     await loadRequests();
+    await loadMeta();
     return data;
   }
 

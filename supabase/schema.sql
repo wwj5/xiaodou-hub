@@ -119,6 +119,127 @@ create table if not exists public.reject_log (
 );
 create index if not exists ix_reject_log_time on public.reject_log (created_at desc);
 
+-- 设备档案：只记"这台设备来过、大概在哪、什么浏览器"，用来做欠码公示
+-- ip_full 只给后台解析城市用（不入任何公开接口）；对外只出 ip_masked（61.178.*.*）
+create table if not exists public.visitor_meta (
+  visitor_hash text primary key,
+  ip_full      inet,
+  ip_masked    text,
+  city         text,
+  city_at      timestamptz,
+  ua_short     text,
+  first_seen   timestamptz not null default now(),
+  last_seen    timestamptz not null default now(),
+  hits         integer not null default 0
+);
+create index if not exists ix_visitor_meta_seen on public.visitor_meta (last_seen desc);
+
+alter table public.visitor_meta enable row level security;
+revoke all on public.visitor_meta from anon, authenticated;
+
+-- IP 脱敏：v4 留前两段，v6 留前三组
+create or replace function public.hub_mask_ip(p_ip text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  v_addr inet;
+  v_host text;
+begin
+  if p_ip is null or btrim(p_ip) = '' then
+    return '';
+  end if;
+  begin
+    v_addr := btrim(p_ip)::inet;
+  exception when others then
+    return '';
+  end;
+  v_host := host(v_addr);
+  if family(v_addr) = 4 then
+    return split_part(v_host, '.', 1) || '.' || split_part(v_host, '.', 2) || '.*.*';
+  end if;
+  return array_to_string((string_to_array(v_host, ':'))[1:3], ':') || ':****';
+end;
+$$;
+
+-- 浏览器 / 设备短标签：先认容器（微信、QQ），再认设备和内核
+create or replace function public.hub_ua_short(p_ua text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_ua is null or btrim(p_ua) = '' then ''
+    else
+      (case
+        when p_ua ilike '%micromessenger%' then '微信'
+        when p_ua ilike '%qq/%' or p_ua ilike '%qqbrowser%' then 'QQ'
+        when p_ua ilike '%edga%' or p_ua ilike '%edg/%' then 'Edge'
+        when p_ua ilike '%firefox%' then 'Firefox'
+        when p_ua ilike '%crios%' or p_ua ilike '%chrome%' then 'Chrome'
+        when p_ua ilike '%safari%' then 'Safari'
+        else '浏览器'
+      end)
+      || ' · ' ||
+      (case
+        when p_ua ilike '%iphone%' then 'iPhone'
+        when p_ua ilike '%ipad%' then 'iPad'
+        when p_ua ilike '%android%' then '安卓'
+        when p_ua ilike '%windows%' then 'Windows'
+        when p_ua ilike '%macintosh%' then 'Mac'
+        when p_ua ilike '%linux%' then 'Linux'
+        else '未知设备'
+      end)
+    end
+  end;
+$$;
+
+-- 每次有设备动一下就记一笔（取 Supabase 网关透传的 x-forwarded-for）
+create or replace function public.hub_touch(p_visitor text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hdrs jsonb;
+  v_ip   text;
+  v_ua   text;
+  v_addr inet;
+begin
+  if p_visitor is null or length(p_visitor) < 8 then
+    return;
+  end if;
+
+  begin
+    v_hdrs := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
+  exception when others then
+    v_hdrs := '{}'::jsonb;
+  end;
+
+  v_ip := btrim(split_part(coalesce(v_hdrs ->> 'x-forwarded-for', v_hdrs ->> 'x-real-ip', ''), ',', 1));
+  v_ua := left(coalesce(v_hdrs ->> 'user-agent', ''), 400);
+
+  begin
+    v_addr := nullif(v_ip, '')::inet;
+  exception when others then
+    v_addr := null;
+  end;
+
+  insert into public.visitor_meta as m
+    (visitor_hash, ip_full, ip_masked, ua_short, first_seen, last_seen, hits)
+  values
+    (p_visitor, v_addr, public.hub_mask_ip(v_ip), public.hub_ua_short(v_ua), now(), now(), 1)
+  on conflict (visitor_hash) do update
+    set ip_full   = coalesce(excluded.ip_full, m.ip_full),
+        ip_masked = coalesce(nullif(excluded.ip_masked, ''), m.ip_masked),
+        ua_short  = coalesce(nullif(excluded.ua_short, ''), m.ua_short),
+        last_seen = now(),
+        hits      = m.hits + 1;
+end;
+$$;
+
 -- ---------------------------------------------------------------- 权限：表一律不可直连
 
 alter table public.invite_codes  enable row level security;
@@ -514,6 +635,8 @@ declare
   v_problem text;
   v_hint    text := '';
 begin
+  perform public.hub_touch(v_visitor);
+
   -- 提交失败一律不算回填：如果这台设备正被限制，提示里说清楚"限制还没解除"
   v_blocked := exists (select 1 from public.visitor_blocks b where b.visitor_hash = v_visitor);
   if v_blocked then
@@ -598,6 +721,8 @@ declare
   v_hourly   integer;
   v_remaining integer;
 begin
+  perform public.hub_touch(v_visitor);
+
   -- 出码方式改成人工发码时，自动揭晓一律关掉（防止有人绕过页面直接抓接口）
   if public.hub_reveal_mode() = 'manual' then
     raise exception '现在不是自动出码：点卡片上的「申请一个码」，站长核对后会私发给你' using errcode = 'P0001';
@@ -701,6 +826,8 @@ declare
   v_today   integer;
   v_reports integer;
 begin
+  perform public.hub_touch(v_visitor);
+
   select * into v_row from public.invite_codes where id = p_id;
   if not found then
     raise exception '邀请码不存在' using errcode = 'P0001';
@@ -1438,6 +1565,8 @@ declare
   v_open    bigint;
   v_id      bigint;
 begin
+  perform public.hub_touch(v_hash);
+
   if length(v_contact) < 4 then
     return json_build_object('ok', false, 'error', '留个能联系上的方式吧（微信 / QQ / 邮箱都行），不然码发不到你手上');
   end if;
@@ -1638,3 +1767,144 @@ grant execute on function public.admin_requests(text) to anon, authenticated;
 grant execute on function public.admin_send_code(text, bigint, uuid) to anon, authenticated;
 grant execute on function public.admin_resolve_request(text, bigint, text) to anon, authenticated;
 grant execute on function public.admin_set_reveal_mode(text, text) to anon, authenticated;
+
+-- 欠码公示：公开接口，只出脱敏信息（城市 + 掩码 IP + 设备短标签 + 欠几个）
+-- 不出完整指纹、不出完整 IP、不出完整联系方式
+create or replace function public.public_debts(p_limit integer default 40)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_limit integer := least(greatest(coalesce(p_limit, 40), 1), 100);
+begin
+  return (
+    with rv as (
+      select r.visitor_hash as vh,
+             count(*) as taken,
+             (array_agg(c.code_norm order by r.created_at desc))[1:1] as got,
+             max(r.created_at) as last_rev
+        from public.reports r
+        join public.invite_codes c on c.id = r.code_id
+       where r.action = 'reveal' and c.status <> 'expired'
+       group by 1
+    ),
+    pb as (
+      select c.creator_hash as vh, count(*) as returned
+        from public.invite_codes c
+       where c.creator_hash is not null and c.status <> 'expired'
+       group by 1
+    ),
+    v as (
+      select vh from rv union select vh from pb
+    ),
+    agg as (
+      select v.vh,
+             coalesce(rv.taken, 0) as taken,
+             coalesce(pb.returned, 0) as returned,
+             greatest(coalesce(rv.taken, 0) - coalesce(pb.returned, 0), 0) as pending,
+             rv.got,
+             rv.last_rev
+        from v
+        left join rv on rv.vh = v.vh
+        left join pb on pb.vh = v.vh
+    )
+    select coalesce(json_agg(
+             json_build_object(
+               'short',    left(a.vh, 8),
+               'city',     coalesce(nullif(m.city, ''), ''),
+               'ipMasked', coalesce(nullif(m.ip_masked, ''), ''),
+               'ua',       coalesce(nullif(m.ua_short, ''), ''),
+               'pending',  a.pending,
+               'lastAt',   a.last_rev,
+               'lastCode', case
+                             when a.got is null or a.got[1] is null then null
+                             else overlay(a.got[1] placing '••' from 3 for 2)
+                           end,
+               'blocked',  exists (select 1 from public.visitor_blocks b where b.visitor_hash = a.vh)
+             )
+             order by a.pending desc, a.last_rev desc nulls last
+           ), '[]'::json)
+      from (select * from agg
+             where pending > 0
+             order by pending desc, last_rev desc nulls last
+             limit v_limit) a
+      left join public.visitor_meta m on m.visitor_hash = a.vh
+  );
+end;
+$$;
+
+-- 后台：拿设备档案（含完整 IP，只在后台出现，用来批量解析城市）
+create or replace function public.admin_meta(p_key text, p_limit integer default 200)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_limit integer := least(greatest(coalesce(p_limit, 200), 1), 1000);
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    select coalesce(json_agg(
+             json_build_object(
+               'hash',    m.visitor_hash,
+               'short',   left(m.visitor_hash, 8),
+               'ip',      host(m.ip_full),
+               'ipMasked', coalesce(m.ip_masked, ''),
+               'city',    coalesce(m.city, ''),
+               'ua',      coalesce(m.ua_short, ''),
+               'firstSeen', m.first_seen,
+               'lastSeen',  m.last_seen,
+               'hits',    m.hits
+             )
+             order by m.last_seen desc
+           ), '[]'::json)
+      from (select * from public.visitor_meta
+             order by last_seen desc
+             limit v_limit) m
+  );
+end;
+$$;
+
+-- 后台：把解析出来的城市写回（p_map 形如 [{"hash":"…","city":"甘肃省白银市"}])
+create or replace function public.admin_set_cities(p_key text, p_map jsonb)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_n integer := 0;
+begin
+  perform public.hub_require_admin(p_key);
+
+  if p_map is null or jsonb_typeof(p_map) <> 'array' then
+    return json_build_object('ok', false, 'error', '要一个数组');
+  end if;
+
+  with src as (
+    select left(btrim(x ->> 'hash'), 64) as h,
+           left(btrim(x ->> 'city'), 60) as c
+      from jsonb_array_elements(p_map) x
+     where coalesce(btrim(x ->> 'city'), '') <> ''
+  )
+  update public.visitor_meta m
+     set city = s.c, city_at = now()
+    from src s
+   where m.visitor_hash = s.h;
+  get diagnostics v_n = row_count;
+
+  return json_build_object('ok', true, 'updated', v_n);
+end;
+$$;
+
+revoke all on function public.public_debts(integer) from public;
+revoke all on function public.admin_meta(text, integer) from public;
+revoke all on function public.admin_set_cities(text, jsonb) from public;
+
+grant execute on function public.public_debts(integer) to anon, authenticated;
+grant execute on function public.admin_meta(text, integer) to anon, authenticated;
+grant execute on function public.admin_set_cities(text, jsonb) to anon, authenticated;
