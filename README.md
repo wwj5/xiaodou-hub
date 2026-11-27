@@ -62,6 +62,9 @@
 - **欠码公示**：首页底部一个可展开的折叠区，列出欠着码没还的设备——大概在哪个城市、用的是什么设备、欠几个、最后什么时候动过。放回一个码就从表上消失。地址只到城市、IP 只留前两段，不公开完整 IP。
 - 领取记录是卡片网格：每张卡显示**已揭走的明文**（下架的打「已下架」）、「N 次揭晓」、时间和复制按钮，
   方便后来的人核对"这个码到底还在不在池子里"。
+- **在线客服**：首页右下角一个圆形按钮，点开就能给站长留言（码怎么用、为什么被限制、申请一直没回，都可以）。
+  站长不一定在线，消息先落库；后台「客服聊天」里一页看完会话列表 + 未读红点，回完访客页面 6 秒拉一次，不用刷新。
+  一台设备一个会话，昵称可留可不留，后台能顺带看到那台设备在城市与机型档案里的记录。
 - 反馈：无效 / 已用掉 / 信息不对 / 其他，写进 Supabase `feedback` 表，不自动改状态。
 - 管理密钥：只存在管理员自己浏览器里，可改剩余次数、顺位、状态；管理端能看到明文。
 - 本机记录：你揭晓到的码存在本地浏览器，刷新后还能看到，也可以再复制。
@@ -168,6 +171,9 @@
 
 独立页面 `/admin.html`（首页页脚「管理入口」进入，`noindex`，只靠密码把门）：
 
+- 版式是左侧深色导航 + 白色顶栏 + 卡片内容区，左栏一列切页（仪表盘 / 邀请码 / 发码申请 / 客服聊天 /
+  接力账本 / 举报 / 设备档案 / 被拒收录 / 水印），窄屏自动收成汉堡抽屉；待办数量在左栏亮红点。
+
 - 输入管理密码 → `admin_verify` 校验，密码只存 sessionStorage，关浏览器即失效；
 - 六张统计卡：累计发放 / 当前可揭 / 今日揭晓 / 欠码未回填 / 待处理举报 / 今日被拒；
 - **发码申请**（`admin_requests` / `admin_send_code` / `admin_resolve_request`）：待发码列表带「揭/回/欠」和联系方式，点「发码」自动取池里顺位最前的码、标成已用、记进领取记录，明文弹出来可复制；也能拒绝。顶部可切「人工发码 / 自动揭晓」；
@@ -191,13 +197,17 @@
   ipwho.is（中文返回）查归属地，再写回库里——一次几十台，串行带间隔，不占带宽也不打爆免费接口。
 - **页面水印**（`admin_set_watermark`）：首页那层斜向水印的两行文字、透明度（0–0.35）在后台改，
   保存即生效、不用重新部署；前端用 canvas 现场画成平铺图，文字最多 40 字，可一键恢复默认。
+- **客服聊天**（`admin_chat_list` / `admin_chat_fetch` / `admin_chat_reply` / `admin_chat_close`）：
+  左边一列是会话（昵称或设备短指纹 + 城市 + 机型 + 最后一句 + 未读数），点开右边出完整对话，
+  回车换行、Ctrl+Enter 发送，能把会话「结束」或重新打开（结束只是挡住访客再发，记录不删）。
 
 > 账本只认前端算出的匿名设备指纹（`sha256('xd-hub:' + token)`），**不采集 IP、不采集姓名或手机号**，
 > 后台也看不到任何可反查真人的信息；页面公开处只给聚合数字（「有 N 人拿了码还没放回来」），不点名。
 
 对应 RPC：`admin_list`、`admin_delete_code`、`admin_clear_codes`、`admin_resolve_report`、`admin_set_key`、
 `admin_ledger`、`admin_block`、`admin_unblock`、`admin_settings`、`admin_set_autoblock`、`admin_rejects`、
-`admin_clear_rejects`、`admin_set_watermark`、`admin_purge_bad`、`admin_set_reveal_mode`、`admin_meta`、`admin_set_cities`（都先过 `hub_require_admin`，
+`admin_clear_rejects`、`admin_set_watermark`、`admin_purge_bad`、`admin_set_reveal_mode`、`admin_meta`、`admin_set_cities`、`admin_chat_list`、
+`admin_chat_fetch`、`admin_chat_reply`、`admin_chat_close`（都先过 `hub_require_admin`，
 anon 可调但没密码就是「管理密码不对」）。
 
 ## 九、本地预览
@@ -220,6 +230,8 @@ python -m http.server 8787
 | `app_settings` | 单行管理密码的 SHA-256、超时分钟数、出码方式（`reveal_mode`：manual 人工发码 / auto 自动揭晓）、水印两行文字与透明度 |
 | `reveal_requests` | 发码申请：设备哈希、联系方式、留言、状态（open / sent / rejected）、发出的码 |
 | `visitor_meta` | 设备档案：完整 IP（只在后台）、脱敏 IP 段、解析出的城市、浏览器设备短标签、来访次数与首末时间 |
+| `chat_threads` | 客服会话：一台设备一条（`visitor_hash` 唯一）、昵称、城市、状态（open / closed）、两边未读数、最后活动时间 |
+| `chat_messages` | 客服消息：所属会话、`side` 区分 visitor / admin、正文（500 字内）、时间，删会话级联删 |
 
 ## 十一、已验证
 
@@ -239,6 +251,8 @@ python -m http.server 8787
 - 接力账本实测：每行的「揭走的码 / 放回的码」与 `reports`、`creator_hash` 对得上，欠 1 的那台显示为欠码并被限制。
 - 清理不合规实测：dry run 只列清单；`p_apply=true` 后统一改 `expired`，不删行、不删领取记录。
 - 水印后台实测：把文字与透明度改到「测试水印一号 / 0.07」，首页立即变化，`admin_set_watermark` 可一键恢复默认。
+- 在线客服实测：首页浮窗发一条 → 后台会话列表出现未读 1 → 点开看到完整对话 → 后台回一条 → 访客端拉到；
+  后台切页、未读红点、结束会话都验过；`chat_send` 每分钟 8 条防刷、关闭的会话拒发。
 
 ## 十二、许可
 

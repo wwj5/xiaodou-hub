@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=43" />
+<link rel="stylesheet" href="styles.css?v=44" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -95,29 +95,515 @@
     .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
   }
+
+  /* ================= 新版外壳：侧边栏 + 顶栏 + 卡片式内容 ================= */
+
+  body { background: #f4f6fb !important; }
+
+  .adm-shell {
+    display: flex;
+    min-height: 100vh;
+    align-items: stretch;
+  }
+
+  /* ---------- 侧边栏 ---------- */
+  .adm-side {
+    width: 224px;
+    flex: 0 0 224px;
+    background: #131c30;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    z-index: 40;
+  }
+
+  .adm-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 16px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+  }
+  .adm-logo-ic {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #4f8ef7, #2f65e3 55%, #224bc0);
+    box-shadow: 0 4px 12px rgba(47, 101, 227, .45);
+    flex: 0 0 auto;
+  }
+  .adm-logo-tx b { display: block; font-size: 14px; color: #fff; letter-spacing: .01em; }
+  .adm-logo-tx i { display: block; font-size: 11px; font-style: normal; color: #7f8ba5; margin-top: 1px; }
+
+  .adm-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 10px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .adm-nav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #a9b5cc;
+    font-size: 13.5px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+    transition: background .14s ease, color .14s ease;
+  }
+  .adm-nav button .ic {
+    width: 16px;
+    font-size: 13px;
+    text-align: center;
+    opacity: .8;
+    flex: 0 0 auto;
+  }
+  .adm-nav button:hover { background: rgba(255, 255, 255, .07); color: #e8eefb; }
+  .adm-nav button.on {
+    background: linear-gradient(135deg, #3f7df0, #2f65e3);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(47, 101, 227, .38);
+  }
+  .adm-nav button.on .ic { opacity: 1; }
+
+  .nav-dot {
+    margin-left: auto;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #e5484d;
+    color: #fff;
+    font-size: 11px;
+    line-height: 17px;
+    text-align: center;
+    font-weight: 600;
+  }
+  .nav-dot[hidden] { display: none; }
+
+  .adm-side-foot {
+    padding: 12px 16px 16px;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+  }
+  .adm-side-foot a { color: #8b97b0; font-size: 12.5px; text-decoration: none; }
+  .adm-side-foot a:hover { color: #cfd9ea; }
+
+  /* ---------- 右侧主区 ---------- */
+  .adm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .adm-top {
+    height: 56px;
+    flex: 0 0 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px;
+    background: #fff;
+    border-bottom: 1px solid #e8ecf4;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .adm-burger {
+    display: none;
+    border: 1px solid #e4e9f2;
+    background: #fff;
+    border-radius: 7px;
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+    color: #5b6478;
+    cursor: pointer;
+  }
+
+  .adm-crumb { flex: 1; min-width: 0; }
+  .adm-crumb b { font-size: 14.5px; color: #1b2333; font-weight: 600; }
+
+  .adm-user { display: flex; align-items: center; gap: 10px; position: relative; }
+  .adm-badge {
+    font-size: 11.5px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    color: #2f65e3;
+    background: #eaf1ff;
+    font-weight: 600;
+  }
+  .adm-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+    background: #fff;
+    color: #2b3446;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .adm-user-btn .car { color: #98a2b5; font-size: 11px; }
+
+  .adm-menu {
+    position: absolute;
+    right: 0;
+    top: 44px;
+    min-width: 148px;
+    padding: 6px;
+    background: #fff;
+    border: 1px solid #e4e9f2;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(23, 34, 56, .12);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .adm-menu[hidden] { display: none; }
+  .adm-menu button,
+  .adm-menu a {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    color: #2b3446;
+    font-size: 13px;
+    font-family: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .adm-menu button:hover,
+  .adm-menu a:hover { background: #f2f5fb; }
+  .adm-menu .danger { color: #d43f3f; }
+
+  /* ---------- 内容区 ---------- */
+  .adm-content { padding: 18px 20px 40px; }
+
+  .pg { display: none; }
+  .pg.on { display: block; }
+
+  .pg-card {
+    background: #fff;
+    border: 1px solid #eaeef6;
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+    box-shadow: 0 1px 3px rgba(23, 34, 56, .04);
+  }
+
+  .pg-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 13px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #f0f3f9;
+  }
+  .pg-head h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1b2333;
+    letter-spacing: .01em;
+  }
+  .pg-head h2 span { font-weight: 400 !important; }
+  .pg-sub { font-size: 12px; color: #98a2b5; }
+
+  /* 统计卡：参考图那种小格 */
+  .adm-stats {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .adm-stat {
+    background: #f8fafd;
+    border: 1px solid #eef2f8;
+    border-radius: 9px;
+    padding: 13px 14px;
+  }
+  .adm-stat span { font-size: 12px; color: #8a94a8; }
+  .adm-stat b { display: block; margin-top: 5px; font-size: 21px; color: #1b2333; letter-spacing: -.02em; }
+
+  /* 筛选条 */
+  .adm-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    background: #f8fafd;
+    border: 1px solid #eef2f8;
+    border-radius: 9px;
+    margin-bottom: 14px;
+  }
+  .adm-bar-tight { padding: 8px 10px; }
+
+  /* 表格 */
+  .adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .adm-table th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 12.5px;
+    color: #7c8699;
+    background: #f8fafd;
+    padding: 10px 12px;
+    white-space: nowrap;
+    border-bottom: 1px solid #eef2f8;
+  }
+  .adm-table th:first-child { border-radius: 8px 0 0 8px; }
+  .adm-table th:last-child { border-radius: 0 8px 8px 0; }
+  .adm-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #f2f5fa;
+    color: #2b3446;
+    vertical-align: middle;
+  }
+  .adm-table tbody tr:hover td { background: #fafcff; }
+
+  .adm-empty {
+    padding: 42px 12px;
+    text-align: center;
+    color: #a6afc0;
+    font-size: 13px;
+  }
+
+  /* 登录框 */
+  .adm-gate {
+    max-width: 420px;
+    margin: 12vh auto 0;
+    background: #fff;
+    border: 1px solid #eaeef6;
+    border-radius: 12px;
+    padding: 26px 24px;
+    box-shadow: 0 8px 30px rgba(23, 34, 56, .07);
+  }
+
+  /* ---------- 客服聊天页 ---------- */
+  .pg-chat .pg-head { margin-bottom: 0; }
+
+  .chat-wrap {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 220px);
+    min-height: 420px;
+    border: 1px solid #eef2f8;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 13px;
+  }
+
+  .chat-side {
+    width: 246px;
+    flex: 0 0 246px;
+    border-right: 1px solid #eef2f8;
+    display: flex;
+    flex-direction: column;
+    background: #fbfcfe;
+  }
+  .chat-side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-bottom: 1px solid #eef2f8;
+    font-size: 12.5px;
+    color: #8a94a8;
+  }
+  .chat-threads { flex: 1; overflow-y: auto; }
+  .chat-threads[hidden] { display: none; }
+
+  .ct-item {
+    padding: 11px 13px;
+    border-bottom: 1px solid #f2f5fa;
+    cursor: pointer;
+    background: #fff;
+    position: relative;
+  }
+  .ct-item:hover { background: #f6f9ff; }
+  .ct-item.on { background: #eef4ff; box-shadow: inset 3px 0 0 #2f65e3; }
+  .ct-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .ct-name { font-size: 13px; font-weight: 600; color: #1b2333; }
+  .ct-time { font-size: 11px; color: #a6afc0; flex: 0 0 auto; }
+  .ct-last {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #7c8699;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ct-meta { margin-top: 4px; font-size: 11px; color: #a6afc0; display: flex; gap: 6px; }
+  .ct-unread {
+    position: absolute;
+    right: 12px;
+    bottom: 11px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #e5484d;
+    color: #fff;
+    font-size: 11px;
+    line-height: 17px;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #fff; }
+  .chat-main-head {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eef2f8;
+    font-size: 13px;
+    color: #2b3446;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+  }
+  .chat-main-head .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: #eef4ff;
+    color: #2f65e3;
+  }
+  .chat-main-head .tag.closed { background: #f1f2f5; color: #8a94a8; }
+
+  .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fbfcfe;
+  }
+  .chat-log-empty { margin: auto; color: #a6afc0; font-size: 13px; }
+
+  .cm { max-width: 76%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .cm.visitor { align-self: flex-start; background: #fff; border: 1px solid #eef2f8; color: #2b3446; border-bottom-left-radius: 4px; }
+  .cm.admin { align-self: flex-end; background: #2f65e3; color: #fff; border-bottom-right-radius: 4px; }
+  .cm-at { align-self: center; font-size: 11px; color: #a6afc0; }
+
+  .chat-reply {
+    border-top: 1px solid #eef2f8;
+    padding: 10px 14px 12px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: #fff;
+  }
+  .chat-reply textarea {
+    flex: 1;
+    resize: none;
+    padding: 9px 11px;
+    border: 1px solid #e4e9f2;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #2b3446;
+    background: #fbfcfe;
+    outline: none;
+  }
+  .chat-reply textarea:focus { border-color: #9db8f5; background: #fff; }
+  .chat-reply-act { display: flex; flex-direction: column; gap: 6px; }
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width: 980px) {
+    .adm-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 820px) {
+    .adm-shell { display: block; }
+    .adm-side {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      transform: translateX(-100%);
+      transition: transform .2s ease;
+      box-shadow: 0 0 40px rgba(0, 0, 0, .3);
+    }
+    .adm-side.open { transform: translateX(0); }
+    .adm-burger { display: block; }
+    .adm-content { padding: 14px 12px 32px; }
+    .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pg-card { padding: 14px 12px 16px; }
+    .chat-wrap { flex-direction: column; height: auto; }
+    .chat-side { width: 100%; flex: none; max-height: 220px; border-right: none; border-bottom: 1px solid #eef2f8; }
+    .chat-main { height: 60vh; }
+    .adm-table { display: block; overflow-x: auto; white-space: nowrap; }
+  }
 </style>
 </head>
 <body>
-<div class="adm-wrap">
-  <div class="adm-head">
-    <h1>管理后台</h1>
-    <div class="tools">
-      <a class="adm-back" href="./">← 返回首页</a>
-      <button class="adm-mini" id="passBtn" type="button" hidden>改密码</button>
-      <button class="adm-mini" id="logoutBtn" type="button" hidden>退出</button>
+<div class="adm-shell">
+  <aside class="adm-side" id="admSide">
+    <div class="adm-logo">
+      <span class="adm-logo-ic">豆</span>
+      <div class="adm-logo-tx"><b>小豆互助</b><i>管理后台</i></div>
     </div>
-  </div>
+    <nav class="adm-nav" id="admNav">
+      <button data-pg="dash" class="on" type="button"><span class="ic">▤</span>仪表盘</button>
+      <button data-pg="codes" type="button"><span class="ic">▦</span>邀请码管理</button>
+      <button data-pg="requests" type="button"><span class="ic">✉</span>发码申请<b class="nav-dot" id="navReq" hidden></b></button>
+      <button data-pg="chat" type="button"><span class="ic">◌</span>客服聊天<b class="nav-dot" id="navChat" hidden></b></button>
+      <button data-pg="ledger" type="button"><span class="ic">⇄</span>接力账本</button>
+      <button data-pg="reports" type="button"><span class="ic">!</span>待处理举报<b class="nav-dot" id="navRep" hidden></b></button>
+      <button data-pg="meta" type="button"><span class="ic">◎</span>设备档案</button>
+      <button data-pg="rejects" type="button"><span class="ic">⊘</span>被拒收录</button>
+      <button data-pg="watermark" type="button"><span class="ic">◍</span>页面水印</button>
+    </nav>
+    <div class="adm-side-foot"><a href="./">← 返回首页</a></div>
+  </aside>
 
-  <div class="adm-gate" id="gate">
-    <h2>输入管理密码</h2>
-    <p>密码校验在服务端，浏览器里只留一个本次会话的通行凭证，关掉标签页就失效。</p>
-    <input id="keyInput" type="password" placeholder="管理密码" spellcheck="false" autocomplete="off" />
-    <button class="primary-btn" id="enterBtn" type="button">进入</button>
-    <p class="adm-err" id="gateErr" hidden></p>
-  </div>
+  <div class="adm-main">
+    <header class="adm-top">
+      <button class="adm-burger" id="admBurger" type="button" aria-label="菜单">≡</button>
+      <div class="adm-crumb"><b id="pgTitle">仪表盘</b></div>
+      <div class="adm-user">
+        <span class="adm-badge">管理员</span>
+        <button class="adm-user-btn" id="userBtn" type="button">wuhao <span class="car">⌄</span></button>
+        <div class="adm-menu" id="userMenu" hidden>
+          <button id="passBtn" type="button" hidden>改密码</button>
+          <a href="./">返回首页</a>
+          <button id="logoutBtn" type="button" class="danger" hidden>退出登录</button>
+        </div>
+      </div>
+    </header>
 
-  <div class="adm-panel" id="panel" hidden>
-    <div class="adm-stats">
+    <div class="adm-gate" id="gate">
+      <h2>输入管理密码</h2>
+      <p>密码校验在服务端，浏览器里只留一个本次会话的通行凭证，关掉标签页就失效。</p>
+      <input id="keyInput" type="password" placeholder="管理密码" spellcheck="false" autocomplete="off" />
+      <button class="primary-btn" id="enterBtn" type="button">进入</button>
+      <p class="adm-err" id="gateErr" hidden></p>
+    </div>
+
+    <div class="adm-content" id="panel" hidden>
+      <section class="pg on" data-pg="dash">
+        <div class="pg-card">
+          <div class="pg-head"><h2>仪表盘</h2><span class="pg-sub">数据每次进入后台时刷新</span></div>
+<div class="adm-stats">
       <div class="adm-stat"><span>累计发放</span><b id="sIssued">–</b></div>
       <div class="adm-stat"><span>当前可揭</span><b id="sAvailable">–</b></div>
       <div class="adm-stat"><span>今日揭晓</span><b id="sRevealToday">–</b></div>
@@ -125,7 +611,12 @@
       <div class="adm-stat"><span>待处理举报</span><b id="sReports">–</b></div>
       <div class="adm-stat"><span>今日被拒</span><b id="sRejects">–</b></div>
     </div>
+        </div>
+      </section>
 
+      <section class="pg" data-pg="codes">
+        <div class="pg-card">
+          <div class="pg-head"><h2>邀请码管理</h2><span class="pg-sub">列表零明文，明文只在码表和领取后出现</span></div>
     <div class="adm-bar">
       <button class="adm-tab on" data-status="all" type="button">全部</button>
       <button class="adm-tab" data-status="available" type="button">可揭晓</button>
@@ -146,10 +637,13 @@
       <tbody id="codeBody"></tbody>
     </table>
     <div class="adm-empty" id="codeEmpty" hidden>这个筛选下没有码。</div>
+        </div>
+      </section>
 
-    <div class="adm-sec">
-      <h2>发码申请 <span id="reqCount" style="color:var(--muted);font-weight:400"></span></h2>
-      <p class="hint">
+      <section class="pg" data-pg="requests">
+        <div class="pg-card">
+          <div class="pg-head"><h2>发码申请 <span id="reqCount" style="color:var(--muted);font-weight:400"></span></h2></div>
+<p class="hint">
         现在出的不是「点一下自动给码」，而是想拿码的人先留个能联系上的方式，你核对完再私发。
         点「发码」会自动从池子里取顺位最前的一个码（标成已用、记进领取记录），然后弹出明文给你复制去发。
         池子里没码就发不出去，先让人放一个进来。
@@ -171,39 +665,42 @@
         <tbody id="reqBody"></tbody>
       </table>
       <div class="adm-empty" id="reqEmpty" hidden>现在没人申请，池子安静着。</div>
-    </div>
-
-    <div class="adm-sec">
-      <h2>设备档案 <span id="metaCount" style="color:var(--muted);font-weight:400"></span></h2>
-      <p class="hint">
-        每台设备最近一次来访记下的 IP 和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
-        点「补全城市」会把带 IP 的设备送去解析归属地（走 ipwho.is，免费公开接口），解析完写回库里。
-      </p>
-      <div class="adm-bar adm-bar-tight">
-        <div class="adm-right">
-          <button class="adm-mini" id="metaReload" type="button">刷新档案</button>
-          <button class="adm-mini" id="metaCity" type="button">补全城市</button>
         </div>
-      </div>
-      <table class="adm-table" id="metaTable">
-        <thead>
-          <tr><th>设备</th><th>城市</th><th>IP</th><th>浏览器</th><th>来访</th><th>最后活跃</th></tr>
-        </thead>
-        <tbody id="metaBody"></tbody>
-      </table>
-      <div class="adm-empty" id="metaEmpty" hidden>还没有设备档案，等有人来过才有。</div>
-    </div>
+      </section>
 
-    <div class="adm-sec">
-      <h2>待处理举报 <span id="reportCount" style="color:var(--muted);font-weight:400"></span></h2>
-      <p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
-      <div id="reportList"></div>
-      <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
-    </div>
+      <section class="pg" data-pg="chat">
+        <div class="pg-card pg-chat">
+          <div class="pg-head"><h2>客服聊天</h2><span class="pg-sub">访客在首页右下角发消息，这里回</span></div>
+          <div class="chat-wrap">
+            <div class="chat-side">
+              <div class="chat-side-head">
+                <span>会话</span>
+                <button class="adm-mini" id="chatReload" type="button">刷新</button>
+              </div>
+              <div class="chat-threads" id="chatThreads"></div>
+              <div class="adm-empty" id="chatEmpty" hidden>还没有人发消息。</div>
+            </div>
+            <div class="chat-main">
+              <div class="chat-main-head" id="chatMainHead">左边挑一个会话</div>
+              <div class="chat-log" id="chatLog">
+                <div class="chat-log-empty">点左边任意一条，查看对话并回复。</div>
+              </div>
+              <div class="chat-reply">
+                <textarea id="chatReplyInput" rows="2" maxlength="500" placeholder="回复内容…"></textarea>
+                <div class="chat-reply-act">
+                  <button class="adm-mini" id="chatCloseBtn" type="button" hidden>结束会话</button>
+                  <button class="primary-btn" id="chatSendBtn" type="button" disabled>发送</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div class="adm-sec">
-      <h2>接力账本 <span id="ledgerCount" style="color:var(--muted);font-weight:400"></span></h2>
-      <p class="hint">
+      <section class="pg" data-pg="ledger">
+        <div class="pg-card">
+          <div class="pg-head"><h2>接力账本 <span id="ledgerCount" style="color:var(--muted);font-weight:400"></span></h2></div>
+<p class="hint">
         按设备指纹统计（浏览器本地算的匿名 ID，不记 IP、不记姓名、不可反查真人）：
         揭晓几个、回填几个、欠几个，欠码的排最前。中间两列是这个设备「揭走了哪些码」「放回来哪些码」，
         两边对不上就是欠着的那一条。限制后这人再点「揭晓」会被直接拒绝。
@@ -230,11 +727,45 @@
         <tbody id="ledgerBody"></tbody>
       </table>
       <div class="adm-empty" id="ledgerEmpty" hidden>还没有人揭晓过，账本是空的。</div>
-    </div>
+        </div>
+      </section>
 
-    <div class="adm-sec">
-      <h2>被拒收录 <span id="rejCount" style="color:var(--muted);font-weight:400"></span></h2>
-      <p class="hint">
+      <section class="pg" data-pg="reports">
+        <div class="pg-card">
+          <div class="pg-head"><h2>待处理举报 <span id="reportCount" style="color:var(--muted);font-weight:400"></span></h2></div>
+<p class="hint">用户揭晓后发现码无效 / 已被用 / 信息不对，会落到这里。处理完从列表消失。</p>
+      <div id="reportList"></div>
+      <div class="adm-empty" id="reportEmpty" hidden>没有待处理举报。</div>
+        </div>
+      </section>
+
+      <section class="pg" data-pg="meta">
+        <div class="pg-card">
+          <div class="pg-head"><h2>设备档案 <span id="metaCount" style="color:var(--muted);font-weight:400"></span></h2></div>
+<p class="hint">
+        每台设备最近一次来访记下的 IP 和浏览器。IP 只在这里出现，首页公示只放城市 + 前两段。
+        点「补全城市」会把带 IP 的设备送去解析归属地（走 ipwho.is，免费公开接口），解析完写回库里。
+      </p>
+      <div class="adm-bar adm-bar-tight">
+        <div class="adm-right">
+          <button class="adm-mini" id="metaReload" type="button">刷新档案</button>
+          <button class="adm-mini" id="metaCity" type="button">补全城市</button>
+        </div>
+      </div>
+      <table class="adm-table" id="metaTable">
+        <thead>
+          <tr><th>设备</th><th>城市</th><th>IP</th><th>浏览器</th><th>来访</th><th>最后活跃</th></tr>
+        </thead>
+        <tbody id="metaBody"></tbody>
+      </table>
+      <div class="adm-empty" id="metaEmpty" hidden>还没有设备档案，等有人来过才有。</div>
+        </div>
+      </section>
+
+      <section class="pg" data-pg="rejects">
+        <div class="pg-card">
+          <div class="pg-head"><h2>被拒收录 <span id="rejCount" style="color:var(--muted);font-weight:400"></span></h2></div>
+<p class="hint">
         提交了但不符合收录规则的码，自动记在这里（只留 7 天）。用来判断规则有没有误杀真码：
         某条原因下如果全是长得像真的码，说明那条定得太严，放宽就行。
       </p>
@@ -252,11 +783,13 @@
         <tbody id="rejBody"></tbody>
       </table>
       <div class="adm-empty" id="rejEmpty" hidden>还没有被拒的记录。</div>
-    </div>
+        </div>
+      </section>
 
-    <div class="adm-sec">
-      <h2>页面水印</h2>
-      <p class="hint">
+      <section class="pg" data-pg="watermark">
+        <div class="pg-card">
+          <div class="pg-head"><h2>页面水印</h2></div>
+<p class="hint">
         首页那层斜向水印的文字和深浅，在这儿改完保存，访客刷新页面就变，不用重新部署。
         两行都别太长（40 字以内），透明度 0–0.35：越大越显眼，太大会挡字。
       </p>
@@ -275,11 +808,13 @@
           <button class="adm-mini" id="wmSave" type="button">保存水印</button>
         </div>
       </div>
+        </div>
+      </section>
     </div>
   </div>
 </div>
 
-<div class="adm-mask" id="confirmMask" hidden>
+<div class="adm-mask" id="confirmMask"<div class="adm-mask" id="confirmMask" hidden>
   <div class="adm-dialog" role="dialog" aria-modal="true">
     <h3 id="confirmTitle">确认</h3>
     <p id="confirmDesc"></p>
@@ -867,6 +1402,7 @@
     $("#passBtn").hidden = false;
     load().catch(onFail);
     loadGrace();
+    loadChatThreads().catch((e) => console.error("CHATLOAD", e));;
   }
 
   function backToGate(msg) {
@@ -1067,6 +1603,203 @@
     if (!$("#passMask").hidden) closePass();
     else if (!$("#confirmMask").hidden) closeConfirm();
   });
+
+  /* ================= 侧边栏导航 ================= */
+
+  const PG_TITLE = {
+    dash: "仪表盘", codes: "邀请码管理", requests: "发码申请", chat: "客服聊天",
+    ledger: "接力账本", reports: "待处理举报", meta: "设备档案",
+    rejects: "被拒收录", watermark: "页面水印",
+  };
+
+  function gotoPage(name) {
+    const sec = document.querySelector('.pg[data-pg="' + name + '"]');
+    if (!sec) return;
+    document.querySelectorAll(".pg").forEach((el) => el.classList.toggle("on", el === sec));
+    document.querySelectorAll("#admNav button").forEach((b) => b.classList.toggle("on", b.dataset.pg === name));
+    const el = $("#pgTitle");
+    if (el) el.textContent = PG_TITLE[name] || "";
+    $("#admSide").classList.remove("open");
+    if (name === "chat") loadChatThreads().catch((e) => console.error("CHATLOAD", e));;
+    if (history.replaceState) history.replaceState(null, "", "#" + name);
+  }
+
+  $("#admNav").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-pg]");
+    if (b) gotoPage(b.dataset.pg);
+  });
+
+  $("#admBurger").addEventListener("click", () => $("#admSide").classList.toggle("open"));
+
+  $("#userBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const m = $("#userMenu");
+    m.hidden = !m.hidden;
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".adm-user")) $("#userMenu").hidden = true;
+  });
+
+  /* ================= 客服聊天 ================= */
+
+  let chThreads = [];
+  let chCur = null;
+
+  function chTime(s) {
+    if (!s) return "";
+    const d = new Date(s);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return "刚刚";
+    if (diff < 3600) return Math.round(diff / 60) + " 分钟前";
+    if (diff < 86400) return Math.round(diff / 3600) + " 小时前";
+    if (diff < 86400 * 7) return Math.round(diff / 86400) + " 天前";
+    return (d.getMonth() + 1) + "/" + d.getDate();
+  }
+
+  function chClock(s) {
+    const d = new Date(s);
+    const p2 = (n) => String(n).padStart(2, "0");
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  }
+
+  function chWho(x) {
+    const bits = [];
+    bits.push(x.nickname ? x.nickname : "设备 " + x.short);
+    if (x.city) bits.push(x.city);
+    return bits.join(" · ");
+  }
+
+  function paintDots() {
+    const reqOpen = (window.__reqOpenCount || 0);
+    const dReq = $("#navReq");
+    if (dReq) { dReq.hidden = !reqOpen; dReq.textContent = reqOpen > 99 ? "99" : reqOpen; }
+
+    const repOpen = (window.__repOpenCount || 0);
+    const dRep = $("#navRep");
+    if (dRep) { dRep.hidden = !repOpen; dRep.textContent = repOpen; }
+
+    const unread = chThreads.reduce((n, x) => n + (x.unread || 0), 0);
+    const dChat = $("#navChat");
+    if (dChat) { dChat.hidden = !unread; dChat.textContent = unread > 99 ? "99" : unread; }
+  }
+
+  function renderThreads() {
+    const box = $("#chatThreads");
+    if (!box) return;
+    box.hidden = chThreads.length === 0;
+    $("#chatEmpty").hidden = chThreads.length > 0;
+    box.innerHTML = chThreads.map((x) => (
+      '<div class="ct-item' + (chCur && chCur.id === x.id ? " on" : "") + '" data-tid="' + x.id + '">' +
+        '<div class="ct-top"><span class="ct-name">' + esc(chWho(x)) + "</span>" +
+          '<span class="ct-time">' + chTime(x.lastAt) + "</span></div>" +
+        '<div class="ct-last">' + esc(x.lastBody || "（空）") + "</div>" +
+        '<div class="ct-meta"><span>' + x.count + " 条</span>" +
+          (x.ua ? "<span>" + esc(x.ua) + "</span>" : "") +
+          (x.status === "closed" ? '<span style="color:#a6afc0">已结束</span>' : "") +
+        "</div>" +
+        (x.unread ? '<span class="ct-unread">' + x.unread + "</span>" : "") +
+      "</div>"
+    )).join("");
+  }
+
+  async function loadChatThreads() {
+    const rows = await rpc("admin_chat_list", { p_key: listKey, p_limit: 200 });
+    chThreads = Array.isArray(rows) ? rows : [];
+    renderThreads();
+    paintDots();
+  }
+
+  async function openThread(id) {
+    const res = await rpc("admin_chat_fetch", { p_key: listKey, p_thread: Number(id) });
+    if (!res || res.ok === false) throw new Error((res && res.error) || "打不开");
+    chCur = res.thread;
+    const head = $("#chatMainHead");
+    head.innerHTML =
+      "<span>" + esc(chWho({ nickname: chCur.nickname, short: chCur.short, city: chCur.city })) + "</span>" +
+      '<span class="tag' + (chCur.status === "closed" ? " closed" : "") + '">' +
+        (chCur.status === "closed" ? "已结束" : "进行中") + "</span>";
+    const log = $("#chatLog");
+    const msgs = res.messages || [];
+    log.innerHTML = msgs.length
+      ? msgs.map((m) => (
+          '<div class="cm ' + (m.side === "admin" ? "admin" : "visitor") + '">' + esc(m.body) + "</div>" +
+          '<div class="cm-at">' + chClock(m.at) + "</div>"
+        )).join("")
+      : '<div class="chat-log-empty">这个会话还没有内容。</div>';
+    log.scrollTop = log.scrollHeight;
+    $("#chatSendBtn").disabled = false;
+    $("#chatCloseBtn").hidden = false;
+    $("#chatCloseBtn").textContent = chCur.status === "closed" ? "重新打开" : "结束会话";
+    await loadChatThreads();
+  }
+
+  async function sendChatReply() {
+    if (!chCur) return;
+    const input = $("#chatReplyInput");
+    const body = (input.value || "").trim();
+    if (!body) return;
+    const btn = $("#chatSendBtn");
+    btn.disabled = true;
+    try {
+      const res = await rpc("admin_chat_reply", { p_key: listKey, p_thread: chCur.id, p_body: body });
+      if (res && res.ok === false) throw new Error(res.error || "发送失败");
+      input.value = "";
+      await openThread(chCur.id);
+      toast("已回复");
+    } catch (err) {
+      onFail(err);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("#chatThreads").addEventListener("click", (e) => {
+    const it = e.target.closest(".ct-item");
+    if (!it) return;
+    openThread(it.dataset.tid).catch(onFail);
+  });
+
+  $("#chatReload").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    try { await loadChatThreads(); toast("已刷新"); } catch (err) { onFail(err); } finally { b.disabled = false; }
+  });
+
+  $("#chatSendBtn").addEventListener("click", sendChatReply);
+  $("#chatReplyInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      sendChatReply();
+    }
+  });
+
+  $("#chatCloseBtn").addEventListener("click", () => {
+    if (!chCur) return;
+    const closing = chCur.status !== "closed";
+    askConfirm(
+      closing ? "结束这个会话" : "重新打开这个会话",
+      closing
+        ? "结束之后访客不能再发消息，历史记录还在。他再发会提示「会话已关」。"
+        : "重新打开后，访客可以继续发消息。",
+      closing ? "结束" : "打开",
+      async () => {
+        const res = await rpc("admin_chat_close", { p_key: listKey, p_thread: chCur.id, p_close: closing });
+        if (res && res.ok === false) throw new Error(res.error || "操作失败");
+        await openThread(chCur.id);
+        toast(closing ? "会话已结束" : "会话已重新打开");
+      }
+    );
+  });
+
+  /* 进后台后每 25 秒刷一次未读，红点别靠手动刷新 */
+  setInterval(() => {
+    if (!listKey || $("#panel").hidden) return;
+    loadChatThreads().catch((e) => console.error("CHATLOAD", e));;
+  }, 25000);
+
+  /* 顶部标题跟着 hash 走 */
+  const startPg = (location.hash || "").replace("#", "");
+  if (startPg && PG_TITLE[startPg]) setTimeout(() => gotoPage(startPg), 60);
 
   if (listKey) enter(listKey);
   else $("#keyInput").focus();

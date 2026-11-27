@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>小豆邀请码互助站</title>
 <meta name="description" content="社区互助：小豆邀请码共享，列表只显示遮罩，申请后由站长私发码。非官方项目。" />
-<link rel="stylesheet" href="styles.css?v=43" />
+<link rel="stylesheet" href="styles.css?v=44" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="96x96" href="assets/favicon-96.png" />
 <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png" />
@@ -168,6 +168,36 @@
     <p class="foot-contact">联系开发者：<a href="mailto:3091188586@qq.com">3091188586@qq.com</a></p>
   </footer>
 </main>
+
+<div class="chat-dock" id="chatDock">
+  <button class="chat-fab" id="chatBtn" type="button" aria-label="联系站长">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-3.4-.6L3 21l1.7-4.6A8.3 8.3 0 0 1 3.5 11 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z"/>
+    </svg>
+    <span class="chat-badge" id="chatBadge" hidden>1</span>
+  </button>
+
+  <div class="chat-panel" id="chatPanel" hidden>
+    <div class="chat-head">
+      <div>
+        <b>联系站长</b>
+        <span>不一定在线，看到就回</span>
+      </div>
+      <button class="chat-x" id="chatClose" type="button" aria-label="收起">×</button>
+    </div>
+    <div class="chat-body" id="chatList">
+      <div class="chat-hello">
+        有问题直接发：码怎么用、为什么被限制、申请一直没回、想放码放不进去，都行。<br />
+        急事也可以发邮件，页脚有地址。
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <textarea id="chatInput" rows="1" maxlength="500" placeholder="说点什么…"></textarea>
+      <button class="chat-send" id="chatSend" type="button">发送</button>
+    </div>
+    <p class="chat-err" id="chatErr" hidden></p>
+  </div>
+</div>
 
 <div class="toast" id="toast" hidden></div>
 
@@ -338,7 +368,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>
 

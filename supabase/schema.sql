@@ -251,6 +251,34 @@ begin
 end;
 $$;
 
+-- 在线客服：一台设备一个会话，访客只填正文，不要求注册
+create table if not exists public.chat_threads (
+  id             bigserial primary key,
+  visitor_hash   text not null unique,
+  nickname       text,
+  city           text,
+  status         text not null default 'open',
+  unread_admin   integer not null default 0,
+  unread_visitor integer not null default 0,
+  last_at        timestamptz not null default now(),
+  created_at     timestamptz not null default now()
+);
+create index if not exists ix_chat_threads_last on public.chat_threads (last_at desc);
+
+create table if not exists public.chat_messages (
+  id         bigserial primary key,
+  thread_id  bigint not null references public.chat_threads(id) on delete cascade,
+  side       text not null,
+  body       text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists ix_chat_msg_thread on public.chat_messages (thread_id, id);
+
+alter table public.chat_threads  enable row level security;
+alter table public.chat_messages enable row level security;
+revoke all on public.chat_threads  from anon, authenticated;
+revoke all on public.chat_messages from anon, authenticated;
+
 -- ---------------------------------------------------------------- 权限：表一律不可直连
 
 alter table public.invite_codes  enable row level security;
@@ -1921,3 +1949,235 @@ revoke all on function public.admin_set_cities(text, jsonb) from public;
 grant execute on function public.public_debts(integer) to anon, authenticated;
 grant execute on function public.admin_meta(text, integer) to anon, authenticated;
 grant execute on function public.admin_set_cities(text, jsonb) to anon, authenticated;
+
+-- ---------------------------------------------------------------- 在线客服
+
+-- 访客：拉自己的会话（没有就返回空），p_after 之后的新消息
+create or replace function public.chat_fetch(p_token text, p_after bigint default 0)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hash text := public.hub_hash(p_token);
+  v_th   public.chat_threads;
+begin
+  select * into v_th from public.chat_threads where visitor_hash = v_hash;
+  if not found then
+    return json_build_object('thread', null, 'messages', '[]'::json, 'unread', 0);
+  end if;
+
+  -- 访客看过就算读过
+  update public.chat_threads set unread_visitor = 0 where id = v_th.id;
+
+  return json_build_object(
+    'thread', json_build_object(
+      'id', v_th.id, 'status', v_th.status, 'createdAt', v_th.created_at
+    ),
+    'messages', coalesce((
+      select json_agg(json_build_object(
+               'id', m.id, 'side', m.side, 'body', m.body, 'at', m.created_at
+             ) order by m.id)
+        from public.chat_messages m
+       where m.thread_id = v_th.id and m.id > coalesce(p_after, 0)
+    ), '[]'::json),
+    'unread', v_th.unread_visitor
+  );
+end;
+$$;
+
+-- 访客：发一条（第一句自动开会话）
+create or replace function public.chat_send(p_token text, p_body text, p_nickname text default '')
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hash text := public.hub_hash(p_token);
+  v_body text := left(btrim(coalesce(p_body, '')), 500);
+  v_nick text := left(btrim(coalesce(p_nickname, '')), 20);
+  v_th   public.chat_threads;
+  v_id   bigint;
+  v_recent integer;
+  v_meta public.visitor_meta;
+begin
+  if length(v_body) < 1 then
+    return json_build_object('ok', false, 'error', '写点什么再发');
+  end if;
+
+  perform public.hub_touch(v_hash, 5);
+
+  select * into v_th from public.chat_threads where visitor_hash = v_hash;
+  if found and v_th.status = 'closed' then
+    return json_build_object('ok', false, 'error', '这个会话已经关了，隔天再来或者直接发邮件');
+  end if;
+
+  -- 防刷：一分钟最多 8 条
+  if found then
+    select count(*) into v_recent from public.chat_messages
+     where thread_id = v_th.id and side = 'visitor'
+       and created_at > now() - interval '1 minute';
+    if v_recent >= 8 then
+      return json_build_object('ok', false, 'error', '发太快了，歇一分钟再说');
+    end if;
+  end if;
+
+  if not found then
+    select * into v_meta from public.visitor_meta where visitor_hash = v_hash;
+    insert into public.chat_threads (visitor_hash, nickname, city, unread_admin, last_at)
+    values (v_hash, nullif(v_nick, ''), coalesce(v_meta.city, ''), 1, now())
+    returning * into v_th;
+  else
+    update public.chat_threads
+       set unread_admin = unread_admin + 1,
+           last_at = now(),
+           nickname = coalesce(nullif(v_nick, ''), nickname),
+           city = coalesce(nullif((select city from public.visitor_meta where visitor_hash = v_hash), ''), city)
+     where id = v_th.id
+    returning * into v_th;
+  end if;
+
+  insert into public.chat_messages (thread_id, side, body)
+  values (v_th.id, 'visitor', v_body)
+  returning id into v_id;
+
+  return json_build_object('ok', true, 'threadId', v_th.id, 'messageId', v_id);
+end;
+$$;
+
+-- 后台：会话列表
+create or replace function public.admin_chat_list(p_key text, p_limit integer default 100)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_limit integer := least(greatest(coalesce(p_limit, 100), 1), 500);
+begin
+  perform public.hub_require_admin(p_key);
+
+  return (
+    select coalesce(json_agg(json_build_object(
+             'id', t.id,
+             'short', left(t.visitor_hash, 8),
+             'nickname', coalesce(t.nickname, ''),
+             'city', coalesce(t.city, ''),
+             'status', t.status,
+             'unread', t.unread_admin,
+             'lastAt', t.last_at,
+             'lastBody', coalesce((
+               select left(m.body, 60) from public.chat_messages m
+                where m.thread_id = t.id order by m.id desc limit 1), ''),
+             'count', (select count(*) from public.chat_messages m where m.thread_id = t.id),
+             'ua', coalesce((select ua_short from public.visitor_meta v where v.visitor_hash = t.visitor_hash), '')
+           ) order by t.unread_admin desc, t.last_at desc), '[]'::json)
+      from (select * from public.chat_threads
+             order by unread_admin desc, last_at desc
+             limit v_limit) t
+  );
+end;
+$$;
+
+-- 后台：读某个会话（顺带清未读）
+create or replace function public.admin_chat_fetch(p_key text, p_thread bigint)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_th public.chat_threads;
+begin
+  perform public.hub_require_admin(p_key);
+
+  select * into v_th from public.chat_threads where id = p_thread;
+  if not found then
+    return json_build_object('ok', false, 'error', '没有这个会话');
+  end if;
+
+  update public.chat_threads set unread_admin = 0 where id = p_thread;
+
+  return json_build_object(
+    'ok', true,
+    'thread', json_build_object(
+      'id', v_th.id, 'short', left(v_th.visitor_hash, 8),
+      'nickname', coalesce(v_th.nickname, ''), 'city', coalesce(v_th.city, ''),
+      'status', v_th.status
+    ),
+    'messages', coalesce((
+      select json_agg(json_build_object(
+               'id', m.id, 'side', m.side, 'body', m.body, 'at', m.created_at
+             ) order by m.id)
+        from public.chat_messages m where m.thread_id = p_thread
+    ), '[]'::json)
+  );
+end;
+$$;
+
+-- 后台：回复
+create or replace function public.admin_chat_reply(p_key text, p_thread bigint, p_body text)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_body text := left(btrim(coalesce(p_body, '')), 500);
+  v_id   bigint;
+begin
+  perform public.hub_require_admin(p_key);
+  if length(v_body) < 1 then
+    return json_build_object('ok', false, 'error', '写点内容再发');
+  end if;
+  if not exists (select 1 from public.chat_threads where id = p_thread) then
+    return json_build_object('ok', false, 'error', '没有这个会话');
+  end if;
+
+  insert into public.chat_messages (thread_id, side, body)
+  values (p_thread, 'admin', v_body)
+  returning id into v_id;
+
+  update public.chat_threads
+     set unread_visitor = unread_visitor + 1, last_at = now()
+   where id = p_thread;
+
+  return json_build_object('ok', true, 'id', v_id);
+end;
+$$;
+
+-- 后台：关掉 / 重开会话
+create or replace function public.admin_chat_close(p_key text, p_thread bigint, p_close boolean default true)
+returns json
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.hub_require_admin(p_key);
+  update public.chat_threads
+     set status = case when coalesce(p_close, true) then 'closed' else 'open' end,
+         unread_admin = 0
+   where id = p_thread;
+  if not found then
+    return json_build_object('ok', false, 'error', '没有这个会话');
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.chat_fetch(text, bigint) from public;
+revoke all on function public.chat_send(text, text, text) from public;
+revoke all on function public.admin_chat_list(text, integer) from public;
+revoke all on function public.admin_chat_fetch(text, bigint) from public;
+revoke all on function public.admin_chat_reply(text, bigint, text) from public;
+revoke all on function public.admin_chat_close(text, bigint, boolean) from public;
+
+grant execute on function public.chat_fetch(text, bigint) to anon, authenticated;
+grant execute on function public.chat_send(text, text, text) to anon, authenticated;
+grant execute on function public.admin_chat_list(text, integer) to anon, authenticated;
+grant execute on function public.admin_chat_fetch(text, bigint) to anon, authenticated;
+grant execute on function public.admin_chat_reply(text, bigint, text) to anon, authenticated;
+grant execute on function public.admin_chat_close(text, bigint, boolean) to anon, authenticated;

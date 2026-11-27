@@ -443,6 +443,16 @@
     debts() {
       return MODE === "remote" ? rpc("public_debts", { p_limit: 40 }) : Promise.resolve([]);
     },
+    chatFetch(after) {
+      if (MODE !== "remote") return Promise.resolve({ thread: null, messages: [] });
+      return rpc("chat_fetch", { p_token: visitorToken(), p_after: after || 0 });
+    },
+    async chatSend(body) {
+      if (MODE !== "remote") throw fail("演示模式没有站长在线");
+      const res = await rpc("chat_send", { p_token: visitorToken(), p_body: body, p_nickname: "" });
+      if (res && res.ok === false) throw fail(res.error || "没发出去");
+      return res;
+    },
   };
 
   /* ---------------------------------------------------------- 状态 */
@@ -455,6 +465,7 @@
     relay: null,
     request: null,
     debts: [],
+    chat: { lastId: 0, threadId: null, open: false, unread: 0, timer: null, loaded: false },
     busy: false,
     feedbackTarget: null,
   };
@@ -967,6 +978,161 @@
   $("#howModal").addEventListener("click", (e) => {
     if (e.target.id === "howModal") closeHow();
   });
+
+  /* ---------------------------------------------------------- 在线客服 */
+
+  const CHAT_KEY = "xd:chat:last";
+
+  function chatScroll() {
+    const box = $("#chatList");
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  function chatAppend(m) {
+    const box = $("#chatList");
+    if (!box) return;
+    const hello = box.querySelector(".chat-hello");
+    if (hello) hello.remove();
+    const row = document.createElement("div");
+    row.className = "chat-msg " + (m.side === "admin" ? "admin" : "visitor");
+    row.textContent = m.body;
+    box.appendChild(row);
+  }
+
+  async function chatLoad(markRead) {
+    const st = state.chat;
+    try {
+      const res = await api.chatFetch(0);
+      const msgs = (res && res.messages) || [];
+      const box = $("#chatList");
+      if (msgs.length) {
+        if (box) box.innerHTML = "";
+        msgs.forEach(chatAppend);
+        st.lastId = msgs[msgs.length - 1].id;
+      }
+      st.threadId = res && res.thread ? res.thread.id : null;
+      st.loaded = true;
+      $("#chatBadge").hidden = true;
+      chatScroll();
+    } catch (e) {
+      /* 拉不到就静默 */
+    }
+  }
+
+  async function chatPoll() {
+    const st = state.chat;
+    if (!st.open) return;
+    try {
+      const res = await api.chatFetch(st.lastId);
+      const msgs = (res && res.messages) || [];
+      if (msgs.length) {
+        msgs.forEach((m) => {
+          if (m.id > st.lastId) {
+            chatAppend(m);
+            st.lastId = m.id;
+          }
+        });
+        chatScroll();
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+  }
+
+  function chatStartPoll() {
+    const st = state.chat;
+    if (st.timer) clearInterval(st.timer);
+    st.timer = setInterval(chatPoll, 6000);
+  }
+
+  function chatStopPoll() {
+    const st = state.chat;
+    if (st.timer) { clearInterval(st.timer); st.timer = null; }
+  }
+
+  async function openChat() {
+    const panel = $("#chatPanel");
+    if (!panel) return;
+    const notice = $("#noticeModal");
+    if (notice && !notice.hidden) notice.hidden = true;
+    panel.hidden = false;
+    state.chat.open = true;
+    $("#chatBadge").hidden = true;
+    if (!state.chat.loaded) await chatLoad();
+    chatScroll();
+    chatStartPoll();
+    setTimeout(() => $("#chatInput").focus(), 60);
+  }
+
+  function closeChat() {
+    const panel = $("#chatPanel");
+    if (panel) panel.hidden = true;
+    state.chat.open = false;
+    chatStopPoll();
+  }
+
+  async function sendChat() {
+    const input = $("#chatInput");
+    const btn = $("#chatSend");
+    const err = $("#chatErr");
+    const body = (input.value || "").trim();
+    if (!body) return;
+    err.hidden = true;
+    btn.disabled = true;
+    try {
+      await api.chatSend(body);
+      input.value = "";
+      input.style.height = "auto";
+      await chatPoll();
+      setTimeout(chatPoll, 900);
+    } catch (e) {
+      err.textContent = e.message || "没发出去";
+      err.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("#chatBtn").addEventListener("click", () => {
+    if (state.chat.open) closeChat();
+    else openChat();
+  });
+  $("#chatClose").addEventListener("click", closeChat);
+  $("#chatSend").addEventListener("click", sendChat);
+  $("#chatInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+  $("#chatInput").addEventListener("input", (e) => {
+    const el = e.currentTarget;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 92) + "px";
+  });
+
+  /* 页面不活跃时停轮询；回来且面板开着就接着转 */
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) chatStopPoll();
+    else if (state.chat.open) { chatPoll(); chatStartPoll(); }
+  });
+
+  /* 打开页面先探一次未读，有回复就在按钮上点红 */
+  if (MODE === "remote") {
+    setTimeout(async () => {
+      try {
+        const res = await api.chatFetch(0);
+        const msgs = (res && res.messages) || [];
+        const lastAdmin = msgs.filter((m) => m.side === "admin").pop();
+        const seen = Number(localStorage.getItem(CHAT_KEY) || 0);
+        if (lastAdmin && lastAdmin.id > seen) {
+          $("#chatBadge").hidden = false;
+          $("#chatBadge").textContent = msgs.filter((m) => m.side === "admin" && m.id > seen).length;
+        }
+        if (msgs.length) state.chat.lastId = msgs[msgs.length - 1].id;
+      } catch (e) { /* 忽略 */ }
+    }, 1200);
+  }
 
   load();
 })();
