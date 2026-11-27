@@ -6,7 +6,7 @@
 <title>管理后台 · 小豆互助站</title>
 <meta name="robots" content="noindex, nofollow" />
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" />
-<link rel="stylesheet" href="styles.css?v=41" />
+<link rel="stylesheet" href="styles.css?v=42" />
 <style>
   .adm-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 22px 70px; position: relative; z-index: 1; }
   .adm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
@@ -477,10 +477,14 @@
     const out = [];
     for (const m of todo) {
       try {
-        const r = await fetch("https://ipwho.is/" + encodeURIComponent(m.ip), { cache: "no-store" });
+        const r = await fetch("https://ipwho.is/" + encodeURIComponent(m.ip) + "?lang=zh-CN", { cache: "no-store" });
         const j = await r.json();
         if (j && j.success) {
-          const city = [j.region, j.city].filter(Boolean).join(" ");
+          const parts = [];
+          if (j.country && j.country !== "中国") parts.push(j.country);
+          if (j.region && j.region !== j.city) parts.push(j.region);
+          if (j.city) parts.push(j.city);
+          const city = parts.filter(Boolean).join(" ");
           if (city) out.push({ hash: m.hash, city: city.slice(0, 60) });
         }
       } catch (err) { /* 单条失败不影响其它 */ }
