@@ -196,9 +196,10 @@
 - **被拒收录**（`admin_rejects`）：所有没通过格式校验的提交都记在 `reject_log`（只留 7 天），
   带「提交的码 / 为什么不收 / 设备短指纹 / 时间」，可按原因筛选、看各原因的条数、一键清空——
   用来判断哪条规则在误杀真码。
-- **设备档案**（`admin_meta` / `admin_set_cities`）：每台来过本站的设备一行，显示完整 IP、脱敏 IP 段、
-  解析出的城市、浏览器设备标签、来访次数、最后活跃。点「补全城市」会把还没解析的设备逐个送到
-  ipwho.is（中文返回）查归属地，再写回库里——一次几十台，串行带间隔，不占带宽也不打爆免费接口。
+- **设备档案**（`admin_meta` / `admin_set_cities`）：每台来过本站的设备一行，显示设备短指纹 + **机型**、
+  完整 IP、脱敏 IP 段、解析出的城市、浏览器标签、最后活跃（带来访次数）。**进这一页就自动补城市**，不用手点：
+  串行、每条隔 500ms，接口按 ipwho.is（中文）→ ip.zxinc.org（中文）→ ipapi.co（英文）逐个降级，解析到就写回库里。
+  实测 ipwho.is 对同一出口 IP 会 429，所以后面留了两个备用源。
 - **页面水印**（`admin_set_watermark`）：一个多行框填首页那层斜向水印（最多两行、每行 40 字，换行就回车一下，写完再按回车直接保存），下面是透明度滑块（0–0.35），
   保存即生效、不用重新部署；前端用 canvas 现场画成平铺图，还能一键恢复默认。
 - **客服聊天**（`admin_chat_list` / `admin_chat_fetch` / `admin_chat_reply` / `admin_chat_close`）：
@@ -236,7 +237,7 @@ python -m http.server 8787
 | `reject_log` | 被拒收录日志：提交的码、拒收原因、设备短指纹，只留 7 天 |
 | `app_settings` | 单行管理密码的 SHA-256、超时分钟数、出码方式（`reveal_mode`：manual 人工发码 / auto 自动揭晓）、水印两行文字与透明度 |
 | `reveal_requests` | 发码申请：设备哈希、联系方式、留言、状态（open / sent / rejected）、发出的码 |
-| `visitor_meta` | 设备档案：完整 IP（只在后台）、脱敏 IP 段、解析出的城市、浏览器设备短标签、来访次数与首末时间 |
+| `visitor_meta` | 设备档案：完整 IP（只在后台）、脱敏 IP 段、城市、浏览器短标签、设备机型（`device_model`，从 UA 抠，安卓到具体型号、iPhone 只到系列）、来访次数与首末时间 |
 | `chat_threads` | 客服会话：一台设备一条（`visitor_hash` 唯一）、昵称、城市、状态（open / closed）、两边未读数、最后活动时间 |
 | `chat_messages` | 客服消息：所属会话、`side` 区分 visitor / admin、正文（500 字内）、时间，删会话级联删 |
 
